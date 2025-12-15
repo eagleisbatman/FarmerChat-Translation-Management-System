@@ -93,3 +93,32 @@
 - Show user-friendly error messages
 - Never expose sensitive information in errors
 
+## File Management
+- **Keep files modular**: Never exceed 400-500 lines per file
+- Split large files into smaller, focused modules
+- Use composition and separation of concerns
+- Create reusable utilities and components
+- One responsibility per file/component
+
+## Documentation
+- **Minimize .md files**: Avoid creating too many markdown documentation files
+- Only create essential documentation (README.md)
+- Keep documentation concise and focused
+- Prefer inline code comments over separate documentation files
+- Don't create multiple status/tracking .md files
+
+## Security & Git
+- **NEVER commit sensitive information**:
+  - API keys, secrets, passwords
+  - Database credentials
+  - Private keys
+  - Environment variables with real values
+  - User data or personal information
+- Always use environment variables for sensitive data
+- Check .gitignore before committing
+- Review diffs before pushing
+- **Never commit .md files** except README.md:
+  - Don't commit status files, analysis files, or documentation files
+  - Only README.md should be committed
+  - Use .gitignore to exclude other .md files
+

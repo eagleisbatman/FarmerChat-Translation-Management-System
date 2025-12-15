@@ -43,3 +43,8 @@ next-env.d.ts
 /public/uploads
 /uploads
 
+# Documentation files (except README.md)
+*.md
+!README.md
+!.gitignore
+
