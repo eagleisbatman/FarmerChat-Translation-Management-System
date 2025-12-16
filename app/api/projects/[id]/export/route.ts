@@ -99,6 +99,14 @@ export async function GET(
     }
 
     if (format === "xliff12" || format === "xliff20") {
+      // Early return if no translations found
+      if (allTranslations.length === 0) {
+        return NextResponse.json(
+          { error: "No approved translations found for export" },
+          { status: 404 }
+        );
+      }
+
       // Get source language (default language)
       const [sourceLang] = await db
         .select()
@@ -110,7 +118,10 @@ export async function GET(
         return NextResponse.json({ error: "Source language not found" }, { status: 400 });
       }
 
-      // Fetch source language translations for all keys
+      // Extract unique key IDs from translations
+      const keyIds = Array.from(new Set(allTranslations.map((t) => t.keyId)));
+
+      // Fetch source language translations for keys in allTranslations only
       const sourceTranslations = await db
         .select({
           keyId: translationKeys.id,
@@ -122,7 +133,8 @@ export async function GET(
         .where(
           and(
             eq(translationKeys.projectId, id),
-            eq(translations.languageId, sourceLang.id)
+            eq(translations.languageId, sourceLang.id),
+            inArray(translationKeys.id, keyIds)
           )
         );
 

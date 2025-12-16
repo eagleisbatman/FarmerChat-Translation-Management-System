@@ -110,7 +110,6 @@ export default async function TranslationKeyDetailPage({
               <ScreenshotManager
                 keyId={keyId}
                 screenshots={screenshots}
-                onUpdate={() => window.location.reload()}
               />
             </CardContent>
           </Card>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,10 +16,11 @@ interface ScreenshotManagerProps {
     imageUrl: string;
     altText?: string | null;
   }>;
-  onUpdate?: () => void;
+  onUpdate?: () => void; // Optional, will use router.refresh() if not provided
 }
 
 export function ScreenshotManager({ keyId, screenshots = [], onUpdate }: ScreenshotManagerProps) {
+  const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +92,14 @@ export function ScreenshotManager({ keyId, screenshots = [], onUpdate }: Screens
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      onUpdate?.();
+      
+      // Use router.refresh() to update Server Component data
+      router.refresh();
+      
+      // Call optional callback if provided
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -117,7 +126,13 @@ export function ScreenshotManager({ keyId, screenshots = [], onUpdate }: Screens
         description: "Screenshot has been removed.",
       });
 
-      onUpdate?.();
+      // Use router.refresh() to update Server Component data
+      router.refresh();
+      
+      // Call optional callback if provided
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
       toast({
         title: "Error",
