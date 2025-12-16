@@ -133,10 +133,13 @@ export async function POST(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new ValidationError(
-        "Invalid request data",
-        "Please check that your file matches the expected format."
+      const errorResponse = formatErrorResponse(
+        new ValidationError(
+          "Invalid request data",
+          "Please check that your file matches the expected format."
+        )
       );
+      return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
     }
     console.error("Error bulk uploading:", error);
     const errorResponse = formatErrorResponse(error);

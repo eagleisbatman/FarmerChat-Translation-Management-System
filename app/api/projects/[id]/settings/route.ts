@@ -59,10 +59,13 @@ export async function PATCH(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new ValidationError(
-        "Invalid settings data",
-        "Please check that all fields are valid."
+      const errorResponse = formatErrorResponse(
+        new ValidationError(
+          "Invalid settings data",
+          "Please check that all fields are valid."
+        )
       );
+      return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
     }
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(errorResponse, { status: errorResponse.statusCode });

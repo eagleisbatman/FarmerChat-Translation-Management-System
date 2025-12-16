@@ -89,12 +89,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      throw new ValidationError(
-        "Invalid request data",
-        "Please check that all required fields are provided correctly."
+      const errorResponse = formatErrorResponse(
+        new ValidationError(
+          "Invalid request data",
+          "Please check that all required fields are provided correctly."
+        )
       );
+      return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
     }
-    console.error("Error translating:", error);
     
     // Check if it's an external service error
     if (error instanceof Error && (
@@ -104,13 +106,17 @@ export async function POST(request: NextRequest) {
     )) {
       const serviceName = error.message.includes("OpenAI") ? "OpenAI" :
                          error.message.includes("Gemini") ? "Gemini" : "Google Translate";
-      throw new ExternalServiceError(
-        serviceName,
-        error.message,
-        `The ${serviceName} translation service encountered an error. Please check your API key and try again.`
+      const errorResponse = formatErrorResponse(
+        new ExternalServiceError(
+          serviceName,
+          error.message,
+          `The ${serviceName} translation service encountered an error. Please check your API key and try again.`
+        )
       );
+      return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
     }
     
+    console.error("Error translating:", error);
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
   }
