@@ -138,4 +138,3 @@ export function formatErrorResponse(error: unknown): {
     ...(process.env.NODE_ENV === "development" && { details: error }),
   };
 }
-
