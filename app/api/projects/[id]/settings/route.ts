@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { formatErrorResponse, ValidationError, NotFoundError, AuthorizationError } from "@/lib/errors";
+import { formatErrorResponse, ValidationError, NotFoundError, AuthorizationError, AuthenticationError } from "@/lib/errors";
 
 const settingsSchema = z.object({
   requiresReview: z.boolean().optional(),
@@ -22,7 +22,7 @@ export async function PATCH(
     const { id } = await params;
 
     if (!session) {
-      throw new AuthorizationError("Authentication required");
+      throw new AuthenticationError("Authentication required");
     }
 
     if (session.user.role !== "admin") {
