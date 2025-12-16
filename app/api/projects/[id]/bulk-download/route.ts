@@ -1,0 +1,150 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { projects, translationKeys, translations, languages } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
+import { z } from "zod";
+
+const bulkDownloadSchema = z.object({
+  keyIds: z.array(z.string()).min(1),
+  format: z.enum(["json", "csv", "xliff12", "xliff20"]).default("json"),
+  targetLanguageCode: z.string().optional(),
+});
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    const { id: projectId } = await params;
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const data = bulkDownloadSchema.parse(body);
+
+    // Verify project exists
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Get translations for selected keys
+    const conditions = [
+      eq(translationKeys.projectId, projectId),
+      inArray(translationKeys.id, data.keyIds),
+      eq(translations.state, "approved"),
+    ];
+
+    if (data.targetLanguageCode) {
+      const [targetLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.code, data.targetLanguageCode))
+        .limit(1);
+      
+      if (targetLang) {
+        conditions.push(eq(translations.languageId, targetLang.id));
+      }
+    }
+
+    const allTranslations = await db
+      .select({
+        key: translationKeys.key,
+        value: translations.value,
+        language: languages.code,
+        namespace: translationKeys.namespace,
+        description: translationKeys.description,
+      })
+      .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+      .innerJoin(languages, eq(translations.languageId, languages.id))
+      .where(and(...conditions));
+
+    // Format response based on format
+    if (data.format === "json") {
+      const grouped: Record<string, Record<string, string>> = {};
+      
+      for (const t of allTranslations) {
+        const ns = t.namespace || "default";
+        if (!grouped[ns]) {
+          grouped[ns] = {};
+        }
+        grouped[ns][t.key] = t.value;
+      }
+
+      return NextResponse.json(grouped);
+    }
+
+    if (data.format === "csv") {
+      const csvRows = ["Key,Language,Namespace,Value"];
+      
+      for (const t of allTranslations) {
+        const escapedValue = `"${t.value.replace(/"/g, '""')}"`;
+        csvRows.push(`${t.key},${t.language},${t.namespace || ""},${escapedValue}`);
+      }
+
+      return new NextResponse(csvRows.join("\n"), {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="bulk-translations.csv"`,
+        },
+      });
+    }
+
+    if (data.format === "xliff12" || data.format === "xliff20") {
+      const { exportToXLIFF12, exportToXLIFF20 } = await import("@/lib/formats/xliff");
+      
+      // Get source language
+      const [sourceLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, project.defaultLanguageId || ""))
+        .limit(1);
+
+      if (!sourceLang) {
+        return NextResponse.json({ error: "Source language not found" }, { status: 400 });
+      }
+
+      const targetLangCode = data.targetLanguageCode || "en";
+      const xliffData = (data.format === "xliff12" ? exportToXLIFF12 : exportToXLIFF20)(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          note: t.description || undefined,
+          namespace: t.namespace || undefined,
+        })),
+        sourceLang.code,
+        targetLangCode
+      );
+
+      return new NextResponse(xliffData, {
+        headers: {
+          "Content-Type": "application/xml",
+          "Content-Disposition": `attachment; filename="bulk-translations.${data.format === "xliff12" ? "xliff" : "xlf"}"`,
+        },
+      });
+    }
+
+    return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
+    }
+    console.error("Error bulk downloading:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+

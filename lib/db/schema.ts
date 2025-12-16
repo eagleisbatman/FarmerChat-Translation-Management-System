@@ -29,6 +29,12 @@ export const projectMemberRoleEnum = pgEnum("project_member_role", [
   "translator",
   "reviewer",
 ]);
+export const translationQueueStatusEnum = pgEnum("translation_queue_status", [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+]);
 
 // NextAuth tables
 export const users = pgTable("user", {
@@ -254,6 +260,39 @@ export const projectMembers = pgTable(
     pk: unique().on(t.projectId, t.userId),
   })
 );
+
+// Translation queue for bulk AI translation
+export const translationQueue = pgTable("translation_queue", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  keyId: text("key_id")
+    .notNull()
+    .references(() => translationKeys.id, { onDelete: "cascade" }),
+  translationId: text("translation_id").references(() => translations.id, { onDelete: "cascade" }),
+  sourceLanguageId: text("source_language_id")
+    .notNull()
+    .references(() => languages.id),
+  targetLanguageId: text("target_language_id")
+    .notNull()
+    .references(() => languages.id),
+  sourceText: text("source_text").notNull(),
+  imageUrl: text("image_url"),
+  status: translationQueueStatusEnum("status").notNull().default("pending"),
+  translatedText: text("translated_text"),
+  error: text("error"),
+  provider: aiProviderEnum("provider"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({
+  projectIdx: index("translation_queue_project_idx").on(t.projectId),
+  statusIdx: index("translation_queue_status_idx").on(t.status),
+}));
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({

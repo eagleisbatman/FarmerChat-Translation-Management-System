@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { projects, translationKeys, translations, languages, projectLanguages } from "@/lib/db/schema";
+import { projects, translationKeys, translations, languages, projectLanguages, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect, notFound } from "next/navigation";
 import { TranslationEditor } from "@/components/translation-editor";
@@ -43,11 +43,21 @@ export default async function TranslationsPage({
     .from(translationKeys)
     .where(eq(translationKeys.projectId, id));
 
-  const allTranslations = await db
-    .select()
+  const allTranslationsData = await db
+    .select({
+      translation: translations,
+      translationKey: translationKeys,
+    })
     .from(translations)
     .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
     .where(eq(translationKeys.projectId, id));
+
+  // Fetch all users for filter dropdown
+  const allUsers = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+  }).from(users);
 
   return (
     <div className="space-y-6">
@@ -62,12 +72,15 @@ export default async function TranslationsPage({
         project={project}
         languages={projectLangs.map((pl) => pl.language)}
         keys={keys}
-        translations={allTranslations.map((t) => ({
-          ...t.translations,
-          key: t.translation_keys.key,
+        translations={allTranslationsData.map((t) => ({
+          ...t.translation,
+          key: t.translationKey.key,
+          createdBy: t.translation.createdBy,
+          createdAt: t.translation.createdAt,
         }))}
         userRole={session.user.role}
         userId={session.user.id}
+        users={allUsers}
       />
     </div>
   );

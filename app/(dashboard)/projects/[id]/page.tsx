@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Languages, Settings, Key, Eye } from "lucide-react";
+import { DeleteKeyButton } from "@/components/delete-key-button";
+import { LanguageManager } from "@/components/language-manager";
+import { TranslationQueueDashboard } from "@/components/translation-queue-dashboard";
 
 export default async function ProjectDetailPage({
   params,
@@ -31,10 +34,16 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const projectLangs = await db
-    .select()
+  const projectLangsData = await db
+    .select({
+      projectLanguage: projectLanguages,
+      language: languages,
+    })
     .from(projectLanguages)
+    .innerJoin(languages, eq(projectLanguages.languageId, languages.id))
     .where(eq(projectLanguages.projectId, id));
+
+  const allLanguages = await db.select().from(languages);
 
   const keys = await db
     .select()
@@ -65,11 +74,12 @@ export default async function ProjectDetailPage({
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="languages">Languages</TabsTrigger>
-          <TabsTrigger value="keys">Translation Keys</TabsTrigger>
-        </TabsList>
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="languages">Languages</TabsTrigger>
+              <TabsTrigger value="keys">Translation Keys</TabsTrigger>
+              <TabsTrigger value="queue">Translation Queue</TabsTrigger>
+            </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -89,7 +99,7 @@ export default async function ProjectDetailPage({
                 <Languages className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{projectLangs.length}</div>
+                <div className="text-2xl font-bold">{projectLangsData.length}</div>
                 <p className="text-xs text-muted-foreground">Active languages</p>
               </CardContent>
             </Card>
@@ -109,33 +119,44 @@ export default async function ProjectDetailPage({
         </TabsContent>
 
         <TabsContent value="languages" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Languages</CardTitle>
-              <CardDescription>
-                Languages enabled for this project
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {projectLangs.length === 0 ? (
-                <p className="text-muted-foreground">No languages configured yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {projectLangs.map((pl) => (
-                    <div key={pl.languageId} className="flex items-center justify-between p-2 border rounded">
-                      <span>{pl.languageId}</span>
-                      {pl.isDefault && (
-                        <span className="text-xs text-muted-foreground">Default</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {session.user.role === "admin" ? (
+            <LanguageManager
+              projectId={id}
+              initialProjectLanguages={projectLangsData}
+              allLanguages={allLanguages}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Project Languages</CardTitle>
+                <CardDescription>
+                  Languages enabled for this project
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {projectLangsData.length === 0 ? (
+                  <p className="text-muted-foreground">No languages configured yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {projectLangsData.map((pl) => (
+                      <div key={pl.language.id} className="flex items-center justify-between p-2 border rounded">
+                        <span>{pl.language.flagEmoji} {pl.language.name} ({pl.language.code})</span>
+                        {pl.projectLanguage.isDefault && (
+                          <span className="text-xs text-muted-foreground">Default</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="keys" className="space-y-4">
+          <TabsContent value="queue" className="space-y-4">
+            <TranslationQueueDashboard projectId={id} />
+          </TabsContent>
+          <TabsContent value="keys" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Translation Keys</CardTitle>
@@ -161,15 +182,28 @@ export default async function ProjectDetailPage({
                           <div className="text-sm text-muted-foreground">{key.description}</div>
                         )}
                       </div>
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/projects/${id}/translations?key=${key.id}`}>Edit</Link>
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/projects/${id}/translations?key=${key.id}`}>Edit</Link>
+                        </Button>
+                        {session.user.role === "admin" && (
+                          <DeleteKeyButton
+                            keyId={key.id}
+                            keyName={key.key}
+                            onDeleted={() => window.location.reload()}
+                          />
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="queue" className="space-y-4">
+          <TranslationQueueDashboard projectId={id} />
         </TabsContent>
       </Tabs>
     </div>

@@ -48,3 +48,6 @@ next-env.d.ts
 !README.md
 !.gitignore
 
+# Docs folder (contains non-committed documentation)
+/docs
+docs/

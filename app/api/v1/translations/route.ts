@@ -1,15 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiKey } from "@/lib/api-middleware";
+import { rateLimit, getRateLimitIdentifier } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { translations, translationKeys, languages, projects } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limiting: 100 requests per minute per API key/IP
+    const identifier = getRateLimitIdentifier(request);
+    const rateLimitResult = rateLimit(identifier, {
+      maxRequests: 100,
+      windowMs: 60 * 1000, // 1 minute
+    });
+
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: "Too many requests. Please try again later.",
+        },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": "100",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": new Date(rateLimitResult.resetTime).toISOString(),
+            "Retry-After": Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000).toString(),
+          },
+        }
+      );
+    }
+
     const { valid, projectId, error } = await validateApiKey(request);
 
     if (!valid || !projectId) {
-      return NextResponse.json({ error: error || "Invalid API key" }, { status: 401 });
+      const errorResponse = formatErrorResponse(
+        new Error(error || "Invalid API key")
+      );
+      return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
     }
 
     const lang = request.nextUrl.searchParams.get("lang");
@@ -22,8 +51,18 @@ export async function GET(request: NextRequest) {
     ];
 
     // Apply language filter if provided
+    let targetLanguageId: string | undefined;
     if (lang) {
-      conditions.push(eq(languages.code, lang));
+      const [targetLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.code, lang))
+        .limit(1);
+      
+      if (targetLang) {
+        conditions.push(eq(translations.languageId, targetLang.id));
+        targetLanguageId = targetLang.id;
+      }
     }
 
     // Build query
@@ -39,16 +78,24 @@ export async function GET(request: NextRequest) {
       .innerJoin(languages, eq(translations.languageId, languages.id))
       .where(and(...conditions));
 
-    // Format response
-    const response: Record<string, Record<string, string>> = {};
+    // Format response data
+    const responseData: Record<string, Record<string, string>> = {};
 
     for (const row of results) {
       const ns = row.namespace || "default";
-      if (!response[ns]) {
-        response[ns] = {};
+      if (!responseData[ns]) {
+        responseData[ns] = {};
       }
-      response[ns][row.key] = row.value;
+      responseData[ns][row.key] = row.value;
     }
+
+    // Helper to add rate limit headers
+    const addRateLimitHeaders = (res: NextResponse) => {
+      res.headers.set("X-RateLimit-Limit", "100");
+      res.headers.set("X-RateLimit-Remaining", rateLimitResult.remaining.toString());
+      res.headers.set("X-RateLimit-Reset", new Date(rateLimitResult.resetTime).toISOString());
+      return res;
+    };
 
     // If language filter is applied, return flat object
     if (lang) {
@@ -56,21 +103,19 @@ export async function GET(request: NextRequest) {
       for (const row of results) {
         flatResponse[row.key] = row.value;
       }
-      return NextResponse.json(flatResponse);
+      return addRateLimitHeaders(NextResponse.json(flatResponse));
     }
 
     // If namespace filter is applied
     if (namespace) {
-      return NextResponse.json(response[namespace] || {});
+      return addRateLimitHeaders(NextResponse.json(responseData[namespace] || {}));
     }
 
-    return NextResponse.json(response);
+    return addRateLimitHeaders(NextResponse.json(responseData));
   } catch (error) {
     console.error("Error fetching translations:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    const errorResponse = formatErrorResponse(error);
+    return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
   }
 }
 

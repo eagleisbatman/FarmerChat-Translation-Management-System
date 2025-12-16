@@ -56,6 +56,11 @@
   - PascalCase for components
   - UPPER_SNAKE_CASE for constants
   - kebab-case for file names (except components)
+- **ALWAYS use current date/time**: Never use dates from training data
+  - Use `date` command or JavaScript `new Date()` to get current date
+  - Format dates as: "Month Year" (e.g., "January 2025")
+  - For timestamps, use ISO format or current system time
+  - When updating documentation dates, always use the actual current date
 
 ## Component Patterns
 - Use Shadcn UI components as base, customize with Tailwind
@@ -106,6 +111,17 @@
 - Keep documentation concise and focused
 - Prefer inline code comments over separate documentation files
 - Don't create multiple status/tracking .md files
+- **Important Reference Documents** (located in `docs/` folder, not committed):
+  - `docs/PLAN.md` - Main implementation plan and status (keep updated with all developments)
+  - `docs/plan/CHANGELOG.md` - Detailed development changelog
+  - `docs/plan/ROADMAP.md` - Future development roadmap
+  - `docs/Agents.md` - AI agents and automation integration guide
+  - `docs/GAP_ANALYSIS.md` - Feature gap analysis
+  - `docs/UX_FLOWS.md` - End-to-end UX flow documentation
+  - `docs/REQUIRED_KEYS.md` - Environment variables and API key setup
+- **Always update `docs/PLAN.md`** when implementing new features or making significant changes
+- When implementing agent integrations or API features, refer to `docs/Agents.md` for patterns and examples
+- If PLAN.md becomes too large, break it into multiple files in `docs/plan/` folder
 
 ## Security & Git
 - **NEVER commit sensitive information**:

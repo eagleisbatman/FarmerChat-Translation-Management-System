@@ -9,7 +9,7 @@ The FarmerChat Translation Management System is a comprehensive solution for man
 ### Key Highlights
 
 - **Enterprise-Ready**: Built for production with scalability and security in mind
-- **AI-Powered**: Integrated support for OpenAI, Google Gemini, and Google Translate
+- **AI-Powered**: Integrated support for OpenAI GPT-4o, Google Gemini Pro, and Google Cloud Translation API
 - **Collaborative**: Role-based workflows with review processes and comments
 - **Developer-Friendly**: RESTful API with API key authentication
 - **Modern UI**: Beautiful, responsive interface with dark/light mode support
@@ -28,7 +28,7 @@ The FarmerChat Translation Management System is a comprehensive solution for man
 
 ### Advanced Features
 
-- **🤖 AI Translation**: Support for OpenAI, Google Gemini, and Google Translate with automatic fallback
+- **🤖 AI Translation**: Support for OpenAI GPT-4o (vision), Gemini Pro Vision, and Google Cloud Translation API with automatic fallback and image context support
 - **🧠 Translation Memory**: Intelligent suggestions based on previously approved translations
 - **📸 Screenshot Support**: Attach UI screenshots to translation keys for visual context
 - **📁 File Import/Export**: Import/export translations in JSON and CSV formats
@@ -84,8 +84,8 @@ The FarmerChat Translation Management System is a comprehensive solution for man
    ALLOWED_EMAIL_DOMAINS=digitalgreen.org,digitalgreentrust.org
    
    # AI Providers (optional)
-   OPENAI_API_KEY=your-openai-key
-   GEMINI_API_KEY=your-gemini-key
+   OPENAI_API_KEY=sk-your-openai-key
+   GOOGLE_GEMINI_API_KEY=your-gemini-key
    GOOGLE_TRANSLATE_API_KEY=your-google-translate-key
    ```
 

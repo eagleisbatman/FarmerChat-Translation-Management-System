@@ -3,7 +3,8 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Upload, Loader2 } from "lucide-react";
+import { Download, Upload, Loader2, Figma } from "lucide-react";
+import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -96,6 +97,12 @@ export function FileImportExport({ projectId }: FileImportExportProps) {
 
   return (
     <div className="flex gap-2">
+      <Button asChild variant="outline" size="sm">
+        <Link href={`/projects/${projectId}/figma-import`}>
+          <Figma className="mr-2 h-4 w-4" />
+          Import from Figma
+        </Link>
+      </Button>
       <Dialog>
         <DialogTrigger asChild>
           <Button variant="outline" size="sm">
@@ -118,6 +125,8 @@ export function FileImportExport({ projectId }: FileImportExportProps) {
                 <SelectContent>
                   <SelectItem value="json">JSON</SelectItem>
                   <SelectItem value="csv">CSV</SelectItem>
+                  <SelectItem value="xliff12">XLIFF 1.2</SelectItem>
+                  <SelectItem value="xliff20">XLIFF 2.0</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -146,7 +155,7 @@ export function FileImportExport({ projectId }: FileImportExportProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json"
+          accept=".json,.csv,.xliff,.xlf"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

@@ -11,6 +11,9 @@ interface AutoTranslateButtonProps {
   sourceLanguageId: string;
   targetLanguageId: string;
   onTranslate: (translatedText: string) => void;
+  keyId?: string; // Optional: to fetch associated screenshots
+  imageUrl?: string; // Optional: direct image URL
+  context?: string; // Optional: additional context
 }
 
 export function AutoTranslateButton({
@@ -19,6 +22,9 @@ export function AutoTranslateButton({
   sourceLanguageId,
   targetLanguageId,
   onTranslate,
+  keyId,
+  imageUrl,
+  context,
 }: AutoTranslateButtonProps) {
   const [isTranslating, setIsTranslating] = useState(false);
   const { toast } = useToast();
@@ -43,6 +49,9 @@ export function AutoTranslateButton({
           text: sourceText,
           sourceLanguageId,
           targetLanguageId,
+          keyId,
+          imageUrl,
+          context,
         }),
       });
 

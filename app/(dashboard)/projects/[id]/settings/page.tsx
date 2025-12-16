@@ -1,12 +1,16 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, users, projectMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect, notFound } from "next/navigation";
 import { ProjectSettingsForm } from "@/components/project-settings-form";
-import { CopyApiKeyButton } from "@/components/copy-api-key-button";
+import { ApiKeyCard } from "@/components/api-key-card";
+import { ProjectMemberManager } from "@/components/project-member-manager";
+import { AIModelConfig } from "@/components/ai-model-config";
+import { ProjectAdvancedSettings } from "@/components/project-advanced-settings";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Key } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default async function ProjectSettingsPage({
   params,
@@ -34,6 +38,23 @@ export default async function ProjectSettingsPage({
     notFound();
   }
 
+  // Fetch project members
+  const projectMembersData = await db
+    .select({
+      projectMember: projectMembers,
+      user: users,
+    })
+    .from(projectMembers)
+    .innerJoin(users, eq(projectMembers.userId, users.id))
+    .where(eq(projectMembers.projectId, id));
+
+  // Fetch all users for member dropdown
+  const allUsers = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+  }).from(users);
+
   return (
     <div className="space-y-6">
       <div>
@@ -43,49 +64,59 @@ export default async function ProjectSettingsPage({
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <SettingsIcon className="h-5 w-5" />
-              General Settings
-            </CardTitle>
-            <CardDescription>Update project details and workflow</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ProjectSettingsForm project={project} />
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="general" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="api">API & Access</TabsTrigger>
+          <TabsTrigger value="ai">AI Translation</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              API Key
-            </CardTitle>
-            <CardDescription>Manage API access for this project</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">API Key</label>
-                <div className="mt-2 flex items-center gap-2">
-                  <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono">
-                    {project.apiKey}
-                  </code>
-                  <CopyApiKeyButton apiKey={project.apiKey} />
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Use this key to access translations via the API
-                </p>
-              </div>
-              <Button variant="destructive" size="sm">
-                Regenerate API Key
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="general" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <SettingsIcon className="h-5 w-5" />
+                  General Settings
+                </CardTitle>
+                <CardDescription>Update project details and workflow</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ProjectSettingsForm project={project} />
+              </CardContent>
+            </Card>
+
+            <ProjectMemberManager
+              projectId={id}
+              initialMembers={projectMembersData}
+              allUsers={allUsers}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="advanced" className="space-y-6">
+          <ProjectAdvancedSettings
+            projectId={id}
+            initialSettings={{
+              requiresReview: project.requiresReview,
+            }}
+          />
+        </TabsContent>
+
+        <TabsContent value="api" className="space-y-6">
+          <ApiKeyCard projectId={id} initialApiKey={project.apiKey} />
+        </TabsContent>
+
+        <TabsContent value="ai" className="space-y-6">
+          <AIModelConfig
+            projectId={id}
+            initialAiProvider={project.aiProvider || undefined}
+            initialAiFallbackProvider={project.aiFallbackProvider || undefined}
+            initialImageContextEnabled={project.imageContextEnabled || false}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

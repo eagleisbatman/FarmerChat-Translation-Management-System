@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { keyScreenshots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getStorageAdapter } from "@/lib/storage";
 
 export async function DELETE(
   request: NextRequest,
@@ -32,7 +33,33 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Extract key from URL (handle both local and cloud URLs)
+    const imageUrl = screenshot.imageUrl;
+    let storageKey: string | null = null;
+
+    if (imageUrl.startsWith("/uploads/")) {
+      // Local storage
+      storageKey = imageUrl.replace("/uploads/", "");
+    } else if (imageUrl.includes("/")) {
+      // Cloud storage - extract key from URL
+      // Format: https://domain.com/path/to/file.jpg or https://bucket.domain.com/file.jpg
+      const urlParts = imageUrl.split("/");
+      storageKey = urlParts[urlParts.length - 1];
+    }
+
+    // Delete from database
     await db.delete(keyScreenshots).where(eq(keyScreenshots.id, id));
+
+    // Delete from storage if key extracted
+    if (storageKey) {
+      try {
+        const storage = getStorageAdapter();
+        await storage.delete(storageKey);
+      } catch (error) {
+        // Log error but don't fail the request
+        console.error("Failed to delete file from storage:", error);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

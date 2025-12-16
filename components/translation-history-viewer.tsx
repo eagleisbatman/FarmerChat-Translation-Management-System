@@ -4,7 +4,20 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { History, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { History, Clock, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface HistoryEntry {
@@ -26,6 +39,8 @@ interface TranslationHistoryViewerProps {
 export function TranslationHistoryViewer({ translationId }: TranslationHistoryViewerProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRollingBack, setIsRollingBack] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadHistory();
@@ -48,6 +63,39 @@ export function TranslationHistoryViewer({ translationId }: TranslationHistoryVi
       console.error("Error loading history:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRollback = async (historyId: string) => {
+    setIsRollingBack(historyId);
+    try {
+      const response = await fetch(`/api/translations/${translationId}/rollback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ historyId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to rollback translation");
+      }
+
+      toast({
+        title: "Translation Rolled Back",
+        description: "The translation has been restored to the selected version.",
+      });
+
+      // Reload history and refresh page
+      loadHistory();
+      window.location.reload();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to rollback translation",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRollingBack(null);
     }
   };
 
@@ -116,6 +164,42 @@ export function TranslationHistoryViewer({ translationId }: TranslationHistoryVi
                   {index < history.length - 1 && (
                     <div className="text-xs text-muted-foreground mt-2">
                       Changed from: "{history[index + 1]?.value}"
+                    </div>
+                  )}
+                  {index > 0 && (
+                    <div className="mt-2">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isRollingBack === entry.id}
+                          >
+                            <RotateCcw className="mr-2 h-3 w-3" />
+                            {isRollingBack === entry.id ? "Rolling back..." : "Rollback to this version"}
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Rollback Translation?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to rollback this translation to the version from{" "}
+                              {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}?
+                              <br />
+                              <br />
+                              <strong>Value:</strong> "{entry.value}"
+                              <br />
+                              <strong>State:</strong> {entry.state}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleRollback(entry.id)}>
+                              Rollback
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   )}
                 </div>

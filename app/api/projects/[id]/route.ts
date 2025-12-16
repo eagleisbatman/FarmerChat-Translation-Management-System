@@ -11,6 +11,8 @@ const updateProjectSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().optional(),
   requiresReview: z.boolean().optional(),
+  aiProvider: z.enum(["openai", "gemini", "google-translate"]).nullable().optional(),
+  aiFallbackProvider: z.enum(["openai", "gemini", "google-translate"]).nullable().optional(),
 });
 
 export async function PATCH(

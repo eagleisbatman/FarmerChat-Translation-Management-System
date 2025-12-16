@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { translationHistory, translations, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
@@ -40,7 +40,7 @@ export async function GET(
       .from(translationHistory)
       .innerJoin(users, eq(translationHistory.changedBy, users.id))
       .where(eq(translationHistory.translationId, id))
-      .orderBy(translationHistory.createdAt);
+      .orderBy(desc(translationHistory.createdAt));
 
     return NextResponse.json(history);
   } catch (error) {

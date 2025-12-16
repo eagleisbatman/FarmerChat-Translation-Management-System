@@ -4,8 +4,8 @@ import { users } from "@/lib/db/schema";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Users as UsersIcon } from "lucide-react";
+import { UserRoleManager } from "@/components/user-role-manager";
 
 export default async function UsersPage() {
   const session = await auth();
@@ -54,19 +54,17 @@ export default async function UsersPage() {
                   <div>
                     <div className="font-medium">{user.name}</div>
                     <div className="text-sm text-muted-foreground">{user.email}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Joined {new Date(user.createdAt).toLocaleDateString()}
+                    </div>
                   </div>
                 </div>
-                <Badge
-                  variant={
-                    user.role === "admin"
-                      ? "default"
-                      : user.role === "reviewer"
-                      ? "secondary"
-                      : "outline"
-                  }
-                >
-                  {user.role}
-                </Badge>
+                <UserRoleManager
+                  userId={user.id}
+                  currentRole={user.role}
+                  userName={user.name}
+                  onRoleChanged={() => window.location.reload()}
+                />
               </div>
             ))}
           </div>

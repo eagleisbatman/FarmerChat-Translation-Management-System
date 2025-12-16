@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { projects, translationKeys, translations, languages, projectLanguages } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { exportToXLIFF12, exportToXLIFF20 } from "@/lib/formats/xliff";
 
 export async function GET(
   request: NextRequest,
@@ -92,6 +93,52 @@ export async function GET(
         headers: {
           "Content-Type": "text/csv",
           "Content-Disposition": `attachment; filename="${project.name}-translations.csv"`,
+        },
+      });
+    }
+
+    if (format === "xliff12" || format === "xliff20") {
+      // Get source language (default language)
+      const [sourceLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, project.defaultLanguageId || ""))
+        .limit(1);
+
+      if (!sourceLang) {
+        return NextResponse.json({ error: "Source language not found" }, { status: 400 });
+      }
+
+      // Group translations by target language
+      const translationsByLang: Record<string, typeof allTranslations> = {};
+      for (const t of allTranslations) {
+        if (!translationsByLang[t.language]) {
+          translationsByLang[t.language] = [];
+        }
+        translationsByLang[t.language].push(t);
+      }
+
+      // Export each target language as separate XLIFF file
+      // For now, export first target language or all combined
+      const targetLangCode = lang || Object.keys(translationsByLang)[0] || "en";
+      const targetTranslations = translationsByLang[targetLangCode] || allTranslations;
+
+      const xliffData = (format === "xliff12" ? exportToXLIFF12 : exportToXLIFF20)(
+        targetTranslations.map((t) => ({
+          key: t.key,
+          source: t.value, // In XLIFF, source is the original language
+          target: t.value, // Target is the translation
+          note: t.description || undefined,
+          namespace: t.namespace || undefined,
+        })),
+        sourceLang.code,
+        targetLangCode
+      );
+
+      return new NextResponse(xliffData, {
+        headers: {
+          "Content-Type": "application/xml",
+          "Content-Disposition": `attachment; filename="${project.name}-${targetLangCode}.${format === "xliff12" ? "xliff" : "xlf"}"`,
         },
       });
     }

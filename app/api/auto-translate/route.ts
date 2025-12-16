@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { AutoTranslateService } from "@/lib/auto-translate";
 import { db } from "@/lib/db";
-import { projects, languages } from "@/lib/db/schema";
+import { projects, languages, keyScreenshots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { formatErrorResponse, ValidationError, NotFoundError, ExternalServiceError } from "@/lib/errors";
 
 const translateSchema = z.object({
   projectId: z.string(),
   text: z.string().min(1),
   sourceLanguageId: z.string(),
   targetLanguageId: z.string(),
+  imageUrl: z.string().url().optional(),
+  imageBase64: z.string().optional(),
+  context: z.string().optional(),
+  keyId: z.string().optional(), // Optional: to fetch associated screenshots
 });
 
 export async function POST(request: NextRequest) {
@@ -32,7 +37,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      throw new NotFoundError("Project");
     }
 
     // Get language codes
@@ -49,16 +54,33 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!sourceLang || !targetLang) {
-      return NextResponse.json({ error: "Language not found" }, { status: 404 });
+      throw new NotFoundError("Language");
     }
 
-    // Translate using auto-translate service
+    // Fetch associated screenshots if keyId is provided
+    let imageUrl = data.imageUrl;
+    if (!imageUrl && data.keyId) {
+      const screenshots = await db
+        .select()
+        .from(keyScreenshots)
+        .where(eq(keyScreenshots.keyId, data.keyId))
+        .limit(1);
+      
+      if (screenshots.length > 0) {
+        imageUrl = screenshots[0].imageUrl;
+      }
+    }
+
+    // Translate using auto-translate service with image context
     const autoTranslate = new AutoTranslateService();
     const result = await autoTranslate.translate(
       {
         text: data.text,
         sourceLanguage: sourceLang.code,
         targetLanguage: targetLang.code,
+        imageUrl: imageUrl,
+        imageBase64: data.imageBase64,
+        context: data.context || (data.keyId ? `Translation key: ${data.keyId}` : undefined),
       },
       project.aiProvider || undefined,
       project.aiFallbackProvider || undefined
@@ -67,13 +89,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      throw new ValidationError(
+        "Invalid request data",
+        "Please check that all required fields are provided correctly."
+      );
     }
     console.error("Error translating:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Translation failed" },
-      { status: 500 }
-    );
+    
+    // Check if it's an external service error
+    if (error instanceof Error && (
+      error.message.includes("OpenAI") ||
+      error.message.includes("Gemini") ||
+      error.message.includes("Google Translate")
+    )) {
+      const serviceName = error.message.includes("OpenAI") ? "OpenAI" :
+                         error.message.includes("Gemini") ? "Gemini" : "Google Translate";
+      throw new ExternalServiceError(
+        serviceName,
+        error.message,
+        `The ${serviceName} translation service encountered an error. Please check your API key and try again.`
+      );
+    }
+    
+    const errorResponse = formatErrorResponse(error);
+    return NextResponse.json(errorResponse, { status: errorResponse.statusCode });
   }
 }
 
