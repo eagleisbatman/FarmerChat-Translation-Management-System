@@ -58,6 +58,7 @@ export async function POST(
 
     const allTranslations = await db
       .select({
+        keyId: translationKeys.id,
         key: translationKeys.key,
         value: translations.value,
         language: languages.code,
@@ -114,15 +115,40 @@ export async function POST(
         return NextResponse.json({ error: "Source language not found" }, { status: 400 });
       }
 
+      // Fetch source language translations for all keys
+      const sourceTranslations = await db
+        .select({
+          keyId: translationKeys.id,
+          value: translations.value,
+        })
+        .from(translations)
+        .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+        .where(
+          and(
+            eq(translationKeys.projectId, projectId),
+            eq(translations.languageId, sourceLang.id),
+            inArray(translationKeys.id, allTranslations.map((t) => t.keyId))
+          )
+        );
+
+      // Create a map of keyId -> source text for quick lookup
+      const sourceTextMap = new Map(
+        sourceTranslations.map((st) => [st.keyId, st.value])
+      );
+
       const targetLangCode = data.targetLanguageCode || "en";
       const xliffData = (data.format === "xliff12" ? exportToXLIFF12 : exportToXLIFF20)(
-        allTranslations.map((t) => ({
-          key: t.key,
-          source: t.value,
-          target: t.value,
-          note: t.description || undefined,
-          namespace: t.namespace || undefined,
-        })),
+        allTranslations.map((t) => {
+          const sourceText = sourceTextMap.get(t.keyId) || t.value;
+          
+          return {
+            key: t.key,
+            source: sourceText, // Source is the original language text
+            target: t.value, // Target is the translation in target language
+            note: t.description || undefined,
+            namespace: t.namespace || undefined,
+          };
+        }),
         sourceLang.code,
         targetLangCode
       );

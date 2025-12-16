@@ -187,7 +187,6 @@ export default async function ProjectDetailPage({
                           <DeleteKeyButton
                             keyId={key.id}
                             keyName={key.key}
-                            onDeleted={() => window.location.reload()}
                           />
                         )}
                       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +19,7 @@ interface UserRoleManagerProps {
   userId: string;
   currentRole: UserRole;
   userName: string;
-  onRoleChanged: () => void;
+  onRoleChanged?: () => void; // Optional, will use router.refresh() if not provided
 }
 
 export function UserRoleManager({
@@ -27,6 +28,7 @@ export function UserRoleManager({
   userName,
   onRoleChanged,
 }: UserRoleManagerProps) {
+  const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<UserRole>(currentRole);
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
@@ -52,7 +54,13 @@ export function UserRoleManager({
         description: `${userName}'s role has been changed to ${newRole}.`,
       });
 
-      onRoleChanged();
+      // Use router.refresh() to update Server Component data
+      router.refresh();
+      
+      // Call optional callback if provided
+      if (onRoleChanged) {
+        onRoleChanged();
+      }
     } catch (error) {
       toast({
         title: "Error",

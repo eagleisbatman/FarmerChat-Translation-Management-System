@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { projects, translationKeys, translations, languages, projectLanguages } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { exportToXLIFF12, exportToXLIFF20 } from "@/lib/formats/xliff";
 
 export async function GET(
@@ -50,6 +50,7 @@ export async function GET(
 
     const allTranslations = await db
       .select({
+        keyId: translationKeys.id,
         key: translationKeys.key,
         value: translations.value,
         language: languages.code,
@@ -109,6 +110,27 @@ export async function GET(
         return NextResponse.json({ error: "Source language not found" }, { status: 400 });
       }
 
+      // Fetch source language translations for all keys
+      const sourceTranslations = await db
+        .select({
+          keyId: translationKeys.id,
+          key: translationKeys.key,
+          value: translations.value,
+        })
+        .from(translations)
+        .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+        .where(
+          and(
+            eq(translationKeys.projectId, id),
+            eq(translations.languageId, sourceLang.id)
+          )
+        );
+
+      // Create a map of keyId -> source text for quick lookup
+      const sourceTextMap = new Map(
+        sourceTranslations.map((st) => [st.keyId, st.value])
+      );
+
       // Group translations by target language
       const translationsByLang: Record<string, typeof allTranslations> = {};
       for (const t of allTranslations) {
@@ -124,13 +146,18 @@ export async function GET(
       const targetTranslations = translationsByLang[targetLangCode] || allTranslations;
 
       const xliffData = (format === "xliff12" ? exportToXLIFF12 : exportToXLIFF20)(
-        targetTranslations.map((t) => ({
-          key: t.key,
-          source: t.value, // In XLIFF, source is the original language
-          target: t.value, // Target is the translation
-          note: t.description || undefined,
-          namespace: t.namespace || undefined,
-        })),
+        targetTranslations.map((t) => {
+          // Use keyId from the translation to find source text
+          const sourceText = sourceTextMap.get(t.keyId) || t.value;
+          
+          return {
+            key: t.key,
+            source: sourceText, // Source is the original language text
+            target: t.value, // Target is the translation in target language
+            note: t.description || undefined,
+            namespace: t.namespace || undefined,
+          };
+        }),
         sourceLang.code,
         targetLangCode
       );

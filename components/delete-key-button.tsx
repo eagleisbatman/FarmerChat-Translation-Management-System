@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -19,10 +20,11 @@ import {
 interface DeleteKeyButtonProps {
   keyId: string;
   keyName: string;
-  onDeleted: () => void;
+  onDeleted?: () => void; // Optional, will use router.refresh() if not provided
 }
 
 export function DeleteKeyButton({ keyId, keyName, onDeleted }: DeleteKeyButtonProps) {
+  const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
@@ -43,7 +45,13 @@ export function DeleteKeyButton({ keyId, keyName, onDeleted }: DeleteKeyButtonPr
         description: `The key "${keyName}" and all its translations have been deleted.`,
       });
 
-      onDeleted();
+      // Use router.refresh() to update Server Component data
+      router.refresh();
+      
+      // Call optional callback if provided
+      if (onDeleted) {
+        onDeleted();
+      }
     } catch (error) {
       toast({
         title: "Error",

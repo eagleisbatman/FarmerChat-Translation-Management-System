@@ -63,7 +63,6 @@ export default async function UsersPage() {
                   userId={user.id}
                   currentRole={user.role}
                   userName={user.name}
-                  onRoleChanged={() => window.location.reload()}
                 />
               </div>
             ))}
