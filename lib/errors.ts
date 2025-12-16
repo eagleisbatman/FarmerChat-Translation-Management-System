@@ -122,12 +122,19 @@ export function handleApiError(error: unknown): {
 /**
  * Format error for API response
  */
-export function formatErrorResponse(error: unknown) {
+export function formatErrorResponse(error: unknown): {
+  error: string;
+  code?: string;
+  message: string;
+  statusCode: number;
+  details?: unknown;
+} {
   const handled = handleApiError(error);
   return {
     error: handled.error,
     code: handled.code,
     message: handled.userMessage || handled.error,
+    statusCode: handled.statusCode,
     ...(process.env.NODE_ENV === "development" && { details: error }),
   };
 }
