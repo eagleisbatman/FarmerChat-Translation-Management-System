@@ -104,6 +104,14 @@ export async function POST(
     if (data.format === "xliff12" || data.format === "xliff20") {
       const { exportToXLIFF12, exportToXLIFF20 } = await import("@/lib/formats/xliff");
       
+      // Early return if no translations found
+      if (allTranslations.length === 0) {
+        return NextResponse.json(
+          { error: "No approved translations found for the selected keys" },
+          { status: 404 }
+        );
+      }
+
       // Get source language
       const [sourceLang] = await db
         .select()
@@ -114,6 +122,9 @@ export async function POST(
       if (!sourceLang) {
         return NextResponse.json({ error: "Source language not found" }, { status: 400 });
       }
+
+      // Extract unique key IDs from translations
+      const keyIds = Array.from(new Set(allTranslations.map((t) => t.keyId)));
 
       // Fetch source language translations for all keys
       const sourceTranslations = await db
@@ -127,7 +138,7 @@ export async function POST(
           and(
             eq(translationKeys.projectId, projectId),
             eq(translations.languageId, sourceLang.id),
-            inArray(translationKeys.id, allTranslations.map((t) => t.keyId))
+            inArray(translationKeys.id, keyIds)
           )
         );
 
