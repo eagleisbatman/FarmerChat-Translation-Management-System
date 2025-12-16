@@ -149,11 +149,13 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(translationQueue.status, status as any));
     }
 
-    const queue = await db
-      .select()
-      .from(translationQueue)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(translationQueue.createdAt);
+    let query = db.select().from(translationQueue);
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    const queue = await query.orderBy(translationQueue.createdAt);
 
     return NextResponse.json(queue);
   } catch (error) {
