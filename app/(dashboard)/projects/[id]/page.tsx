@@ -153,10 +153,7 @@ export default async function ProjectDetailPage({
           )}
         </TabsContent>
 
-          <TabsContent value="queue" className="space-y-4">
-            <TranslationQueueDashboard projectId={id} />
-          </TabsContent>
-          <TabsContent value="keys" className="space-y-4">
+        <TabsContent value="keys" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Translation Keys</CardTitle>
