@@ -1,0 +1,541 @@
+[
+  {
+    "id": "TC001",
+    "title": "Admin creates and configures a translation project",
+    "description": "Verify that an admin user can successfully create a new translation project, configure languages, add team members with roles, and generate API keys.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as an Admin user"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to the project creation page"
+      },
+      {
+        "type": "action",
+        "description": "Fill in project details including name and default language"
+      },
+      {
+        "type": "action",
+        "description": "Add multiple languages to the project"
+      },
+      {
+        "type": "action",
+        "description": "Add team members with roles: Translator, Reviewer, and Admin"
+      },
+      {
+        "type": "action",
+        "description": "Create and save the project"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the project is created with all specified details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify API keys are generated and accessible"
+      },
+      {
+        "type": "assertion",
+        "description": "Check team members have correct role-based access"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Translator edits translation with AI assistance and submits draft",
+    "description": "Validate the translator can access the translation grid, edit translation cells inline, use AI translation suggestions, and submit the translation as a draft.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as a Translator"
+      },
+      {
+        "type": "action",
+        "description": "Open a configured translation project"
+      },
+      {
+        "type": "action",
+        "description": "Locate a translation key in the grid"
+      },
+      {
+        "type": "action",
+        "description": "Edit the translation inline"
+      },
+      {
+        "type": "action",
+        "description": "Use AI translation assistance and choose a suggested translation"
+      },
+      {
+        "type": "action",
+        "description": "Save changes and submit translation in draft state"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure the translation is saved as draft with updated content"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify AI provider fallback works if the primary AI service fails"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Reviewer approves and requests changes on translations",
+    "description": "Check that the reviewer can review submitted translations in draft state, approve or request changes, and trigger notifications.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as Reviewer"
+      },
+      {
+        "type": "action",
+        "description": "Open a translation project and filter translations needing review"
+      },
+      {
+        "type": "action",
+        "description": "Review a translation in draft state"
+      },
+      {
+        "type": "action",
+        "description": "Approve the translation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the translation status changes to approved"
+      },
+      {
+        "type": "action",
+        "description": "Review another translation and request changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the translation is marked for changes and notifications are sent to the translator"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Translation workflow state transition and audit logging",
+    "description": "Ensure that translations correctly transition between draft, review, and approved states with accurate history logging including user attribution.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Submit a translation as draft"
+      },
+      {
+        "type": "assertion",
+        "description": "Check translation state is draft and logged in history"
+      },
+      {
+        "type": "action",
+        "description": "Reviewer changes draft to review and then to approved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify each state transition appears in audit logs with correct user info"
+      },
+      {
+        "type": "action",
+        "description": "Perform rollback to previous approved version"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm rollback is successful and logged"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "File import with validation and preview for supported formats",
+    "description": "Test importing translation files in JSON, CSV, XLIFF 1.2 and 2.0 formats with successful validation and data preview.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to bulk upload/import page"
+      },
+      {
+        "type": "action",
+        "description": "Upload a valid JSON translation file"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the file is parsed and previewed without errors"
+      },
+      {
+        "type": "action",
+        "description": "Repeat upload for CSV, XLIFF 1.2, and XLIFF 2.0 files"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure validation errors appear for corrupt or incorrectly formatted files"
+      },
+      {
+        "type": "action",
+        "description": "Approve and import the valid files"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm translations are added or updated accordingly"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Bulk operations on translation keys",
+    "description": "Verify bulk editing, approvals, and deletions operate correctly on selected translation keys.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Select multiple translation keys in the translation grid"
+      },
+      {
+        "type": "action",
+        "description": "Perform bulk approve operation"
+      },
+      {
+        "type": "assertion",
+        "description": "Check all selected translations change status to approved"
+      },
+      {
+        "type": "action",
+        "description": "Perform bulk edit to update translation texts"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all selected translations are updated accordingly"
+      },
+      {
+        "type": "action",
+        "description": "Delete selected translation keys in bulk"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm keys are removed from the project"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Screenshot upload, display, and optimization",
+    "description": "Test that users can upload screenshots associated with translation keys and verify image optimization and cloud storage functionality.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to screenshot management interface for a translation key"
+      },
+      {
+        "type": "action",
+        "description": "Upload multiple image files with various formats and sizes"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure images are uploaded successfully to cloud storage"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify images display properly in the UI with optimized loading"
+      },
+      {
+        "type": "action",
+        "description": "Delete one screenshot"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the screenshot is deleted from storage and UI"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Public API translation data fetching with authentication and filtering",
+    "description": "Check that the RESTful API endpoint returns translation data with proper API key authentication, supports language and namespace filters, and enforces rate limiting.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send API request with valid API key to fetch translations"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm translations data is returned with correct filtering based on parameters"
+      },
+      {
+        "type": "action",
+        "description": "Send API request with missing or invalid API key"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify API returns unauthorized error"
+      },
+      {
+        "type": "action",
+        "description": "Send rapid successive requests to test rate limiting"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure API throttles excessive requests and responds with rate limit errors"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Notification system triggers and displays notifications",
+    "description": "Validate that notifications are generated and delivered for review requests, translation approvals, @mentions in comments, and queue job updates; notifications appear in-app correctly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "As a Reviewer, request changes on a translation"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the Translator receives a notification for the review request"
+      },
+      {
+        "type": "action",
+        "description": "Approve a translation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify notification is sent to relevant users"
+      },
+      {
+        "type": "action",
+        "description": "Add a comment with an @mention"
+      },
+      {
+        "type": "assertion",
+        "description": "Check mentioned user receives notification"
+      },
+      {
+        "type": "action",
+        "description": "Trigger translation queue job update"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure notification status updates are reflected in notification center"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Security tests for unauthorized access and API key misuse",
+    "description": "Verify robust security mechanisms prevent unauthorized data access, SQL injection, API key enumeration, and enforce organization-based access restrictions.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to access project data without authentication"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access is denied"
+      },
+      {
+        "type": "action",
+        "description": "Try SQL injection in input fields and API parameters"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure inputs are sanitized and injection attacks fail"
+      },
+      {
+        "type": "action",
+        "description": "Use a revoked API key to access public API"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm access is blocked"
+      },
+      {
+        "type": "action",
+        "description": "Simulate user from different organization accessing restricted data"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm organization access control prevents data leakage"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Bulk AI translation queue processing with error recovery",
+    "description": "Test that the background queue processes bulk AI translation jobs correctly including fallback to secondary providers, status tracking, error handling, and retry mechanisms.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Submit a bulk translation job requesting AI translations"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the job is queued and appears in the queue dashboard with pending status"
+      },
+      {
+        "type": "action",
+        "description": "Simulate primary AI provider failure during job processing"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify fallback AI provider is invoked"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure job status updates to completed or failed accordingly"
+      },
+      {
+        "type": "action",
+        "description": "Trigger job retry for failed tasks"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm retry executes and updates job history"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Analytics dashboard displays accurate real-time translation metrics",
+    "description": "Check that the analytics dashboard correctly displays translation progress, user contributions, review turnaround times, and other relevant metrics with charts and visualizations.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in and navigate to the analytics dashboard of a project"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify translation completion rates are displayed correctly"
+      },
+      {
+        "type": "assertion",
+        "description": "Check user contribution statistics match database records"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure review turnaround times and other metrics display accurate values"
+      },
+      {
+        "type": "assertion",
+        "description": "Validate graphs and charts load properly and update with real-time data"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "CLI authentication, translation synchronization, and error handling",
+    "description": "Validate CLI tools authenticate via OAuth, synchronize translations correctly, and handle errors gracefully.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Run CLI login command and complete OAuth flow"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm successful authentication and token storage"
+      },
+      {
+        "type": "action",
+        "description": "Run CLI sync command to synchronize local and remote translations"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify translations are uploaded and downloaded correctly without data loss"
+      },
+      {
+        "type": "action",
+        "description": "Simulate network interruption during sync"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm CLI reports error and supports retry"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "UI components render correctly on different devices and browsers",
+    "description": "Test that all UI components, including grids, dialogs, buttons, and notifications, render correctly and maintain accessibility compliance across various devices and browsers.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the application on desktop browsers (Chrome, Firefox, Safari, Edge)"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify UI components render without visual defects"
+      },
+      {
+        "type": "action",
+        "description": "Open the application on mobile devices (iOS and Android)"
+      },
+      {
+        "type": "assertion",
+        "description": "Check UI responsiveness and layout adapt correctly"
+      },
+      {
+        "type": "action",
+        "description": "Use keyboard navigation and screen reader tools on UI components"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure accessibility compliance (ARIA roles, focus management)"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Import translation keys from Figma with text node extraction",
+    "description": "Verify the integration with Figma allows importing translation keys by extracting text nodes from design files accurately.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Authenticate and connect to Figma account"
+      },
+      {
+        "type": "action",
+        "description": "Select a Figma design file for import"
+      },
+      {
+        "type": "action",
+        "description": "Start the import process"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify translation keys are created from all text nodes"
+      },
+      {
+        "type": "assertion",
+        "description": "Check for error handling with invalid or empty Figma files"
+      }
+    ]
+  }
+]
