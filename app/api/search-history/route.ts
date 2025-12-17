@@ -60,7 +60,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        formatErrorResponse(new ValidationError("Invalid JSON in request body")),
+        { status: 400 }
+      );
+    }
+
     const { projectId, query, filters, resultCount } = body;
 
     if (!projectId || !query) {
@@ -90,7 +99,7 @@ export async function POST(request: NextRequest) {
       const [updated] = await db
         .update(searchHistory)
         .set({
-          resultCount: resultCount || recent.resultCount,
+          resultCount: resultCount ?? recent.resultCount,
           createdAt: new Date(), // Update timestamp to make it most recent
         })
         .where(eq(searchHistory.id, recent.id))
@@ -108,7 +117,7 @@ export async function POST(request: NextRequest) {
         projectId,
         query,
         filters: filters ? JSON.stringify(filters) : null,
-        resultCount: resultCount || 0,
+        resultCount: resultCount ?? 0,
         createdAt: new Date(),
       })
       .returning();
