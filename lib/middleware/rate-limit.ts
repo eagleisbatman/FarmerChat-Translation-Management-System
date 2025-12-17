@@ -56,8 +56,10 @@ export function withRateLimit(
     // Execute handler
     const response = await handler(request);
 
-    // Add rate limit headers to successful responses
-    if (!config.skipSuccessfulRequests || response.status < 400) {
+    // Add rate limit headers to responses
+    // If skipSuccessfulRequests is enabled, only add headers to error responses (status >= 400)
+    // Otherwise, add headers to all responses
+    if (!config.skipSuccessfulRequests || response.status >= 400) {
       response.headers.set("X-RateLimit-Limit", config.maxRequests.toString());
       response.headers.set("X-RateLimit-Remaining", rateLimitResult.remaining.toString());
       response.headers.set("X-RateLimit-Reset", new Date(rateLimitResult.resetTime).toISOString());

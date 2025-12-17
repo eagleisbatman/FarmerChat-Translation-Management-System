@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { comments, translations, users, translationKeys, projects, projectMembers } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { parseMentions } from "@/lib/utils/mentions";
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const allUsers = await db
       .select()
       .from(users)
-      .orderBy(users.createdAt)
+      .orderBy(desc(users.createdAt))
       .limit(500);
 
     // Create user map for mention parsing
