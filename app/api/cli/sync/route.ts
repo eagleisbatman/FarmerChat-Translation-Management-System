@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
             keyId: translationKey.id,
             languageId: targetLanguageId,
             value,
-            state: project.requiresReview ? "review" : "draft",
+            state: project.requiresReview ? "draft" : "approved",
             createdBy: userId,
             createdAt: new Date(),
             updatedAt: new Date(),

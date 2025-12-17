@@ -191,6 +191,14 @@ export async function PATCH(
       return NextResponse.json(formatErrorResponse(new NotFoundError("Organization member")), { status: 404 });
     }
 
+    // Prevent demoting from owner role (organization must have exactly one owner)
+    if (currentMember.role === "owner" && data.role !== "owner") {
+      return NextResponse.json(
+        formatErrorResponse(new ValidationError("Cannot change owner role. Organization must have exactly one owner.")),
+        { status: 400 }
+      );
+    }
+
     // If changing from admin to member, check if there are other admins
     if (currentMember.role === "admin" && data.role === "member") {
       const adminCount = await db
