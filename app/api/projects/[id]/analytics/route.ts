@@ -163,7 +163,7 @@ export async function GET(
       .groupBy(translationKeys.namespace)
       .orderBy(desc(count(translationKeys.id)));
 
-    return NextResponse.json({
+    const analyticsData = {
       project: {
         id: project.id,
         name: project.name,

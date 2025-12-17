@@ -9,6 +9,25 @@ import { redirect } from "next/navigation";
  * OAuth callback for CLI login
  * After user authenticates, generate token and redirect back to CLI
  */
+
+/**
+ * Validate redirect URL to prevent open redirect attacks
+ * Only allows localhost URLs for CLI callback
+ */
+function isValidRedirectUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    // Only allow localhost, 127.0.0.1, or ::1 for CLI callbacks
+    const allowedHosts = ["localhost", "127.0.0.1", "::1"];
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      allowedHosts.includes(parsed.hostname.toLowerCase())
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   const redirectUrl = request.nextUrl.searchParams.get("redirect");
@@ -31,8 +50,8 @@ export async function GET(request: NextRequest) {
     createdAt: new Date(),
   });
 
-  // Redirect back to CLI with token
-  if (redirectUrl) {
+  // Redirect back to CLI with token (only if URL is valid)
+  if (redirectUrl && isValidRedirectUrl(redirectUrl)) {
     const url = new URL(redirectUrl);
     url.searchParams.set("token", token);
     return redirect(url.toString());

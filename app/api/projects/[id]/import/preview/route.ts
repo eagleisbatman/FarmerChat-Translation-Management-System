@@ -65,7 +65,7 @@ export async function POST(
     }
 
     // Verify user has access to project's organization
-    await verifyProjectAccess(session.user.id, projectId);
+    const { project } = await verifyProjectAccess(session.user.id, projectId);
 
     const text = await file.text();
     let parsedData: Array<{
