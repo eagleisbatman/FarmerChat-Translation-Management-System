@@ -1,0 +1,42 @@
+{
+  "name": "@linguaflow/cli",
+  "version": "0.1.0",
+  "description": "LinguaFlow CLI - Command-line tool for managing translations",
+  "main": "dist/index.js",
+  "bin": {
+    "linguaflow": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "translation",
+    "i18n",
+    "localization",
+    "cli",
+    "linguaflow"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "open": "^10.1.0",
+    "node-fetch": "^3.3.2",
+    "chalk": "^5.3.0",
+    "conf": "^13.0.0",
+    "glob": "^11.0.0",
+    "inquirer": "^10.2.2"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

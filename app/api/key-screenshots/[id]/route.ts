@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { keyScreenshots } from "@/lib/db/schema";
+import { keyScreenshots, translationKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getStorageAdapter } from "@/lib/storage";
+import { formatErrorResponse, AuthenticationError, NotFoundError, ForbiddenError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 export async function DELETE(
   request: NextRequest,
@@ -14,23 +16,32 @@ export async function DELETE(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    // Get screenshot to check ownership or admin
-    const [screenshot] = await db
-      .select()
+    // Get screenshot with key to verify project access
+    const [screenshotData] = await db
+      .select({
+        screenshot: keyScreenshots,
+        key: translationKeys,
+      })
       .from(keyScreenshots)
+      .innerJoin(translationKeys, eq(keyScreenshots.keyId, translationKeys.id))
       .where(eq(keyScreenshots.id, id))
       .limit(1);
 
-    if (!screenshot) {
-      return NextResponse.json({ error: "Screenshot not found" }, { status: 404 });
+    if (!screenshotData) {
+      return NextResponse.json(formatErrorResponse(new NotFoundError("Screenshot")), { status: 404 });
     }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, screenshotData.key.projectId);
+
+    const screenshot = screenshotData.screenshot;
 
     // Only allow deletion by uploader or admin
     if (screenshot.uploadedBy !== session.user.id && session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(formatErrorResponse(new ForbiddenError("Only the uploader or an admin can delete this screenshot")), { status: 403 });
     }
 
     // Extract key from URL (handle both local and cloud URLs)
@@ -64,10 +75,7 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting screenshot:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

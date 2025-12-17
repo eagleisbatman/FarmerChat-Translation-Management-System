@@ -3,8 +3,8 @@ import Google from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "./db";
 import { users, accounts, sessions, verificationTokens } from "./db/schema";
-import { isEmailAllowed } from "./auth-config";
 import { eq } from "drizzle-orm";
+import { autoJoinOrganizationByDomain } from "./organizations/context";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -25,8 +25,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return false;
       }
 
-      // Check if email domain is allowed
-      if (!isEmailAllowed(user.email)) {
+      // Check if email domain is allowed (global check first)
+      // Organization-level checks happen after user is created/joined
+      const { isEmailAllowedSync } = await import("./auth-config");
+      if (!isEmailAllowedSync(user.email)) {
         return false;
       }
 
@@ -43,6 +45,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (dbUser[0]) {
           session.user.role = dbUser[0].role;
+          session.user.organizationId = dbUser[0].organizationId || undefined;
+
+          // Auto-join user to organization based on email domain if not already joined
+          // This runs on every session, but autoJoinOrganizationByDomain checks for existing membership
+          if (dbUser[0].email && !dbUser[0].organizationId) {
+            try {
+              await autoJoinOrganizationByDomain(user.id, dbUser[0].email);
+              // Refresh user data after auto-join
+              const [updatedUser] = await db
+                .select()
+                .from(users)
+                .where(eq(users.id, user.id))
+                .limit(1);
+              if (updatedUser) {
+                session.user.organizationId = updatedUser.organizationId || undefined;
+              }
+            } catch (error) {
+              console.error("Error auto-joining organization:", error);
+              // Don't fail session creation if auto-join fails
+            }
+          }
         }
       }
       return session;

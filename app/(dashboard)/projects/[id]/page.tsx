@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Languages, Settings, Key, Eye } from "lucide-react";
+import { Languages, Settings, Key, Eye, BarChart3 } from "lucide-react";
 import { DeleteKeyButton } from "@/components/delete-key-button";
 import { LanguageManager } from "@/components/language-manager";
 import { TranslationQueueDashboard } from "@/components/translation-queue-dashboard";
@@ -58,6 +58,12 @@ export default async function ProjectDetailPage({
           <p className="text-muted-foreground">{project.description || "No description"}</p>
         </div>
         <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/projects/${id}/analytics`}>
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analytics
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href={`/projects/${id}/settings`}>
               <Settings className="mr-2 h-4 w-4" />
@@ -116,6 +122,20 @@ export default async function ProjectDetailPage({
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Analytics & Insights</CardTitle>
+              <CardDescription>View detailed analytics and metrics for this project</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild>
+                <Link href={`/projects/${id}/analytics`}>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  View Analytics Dashboard
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="languages" className="space-y-4">

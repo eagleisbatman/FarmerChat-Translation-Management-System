@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canApproveTranslation, canEditTranslation } from "@/lib/workflow";
 import { nanoid } from "nanoid";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const updateTranslationSchema = z.object({
   value: z.string().min(1).optional(),
@@ -21,40 +23,49 @@ export async function PATCH(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = updateTranslationSchema.parse(body);
 
-    // Get existing translation
+    // Get existing translation with key to get projectId
     const [existing] = await db
-      .select()
+      .select({
+        translation: translations,
+        key: translationKeys,
+      })
       .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
       .where(eq(translations.id, id))
       .limit(1);
 
     if (!existing) {
-      return NextResponse.json({ error: "Translation not found" }, { status: 404 });
+      return NextResponse.json(formatErrorResponse(new Error("Translation not found")), { status: 404 });
     }
 
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, existing.key.projectId);
+
+    const existingTranslation = existing.translation;
+
     // Check permissions
-    if (data.state && data.state !== existing.state) {
-      if (data.state === "approved" && !canApproveTranslation(session.user.role, existing.state)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (data.state && data.state !== existingTranslation.state) {
+      if (data.state === "approved" && !canApproveTranslation(session.user.role, existingTranslation.state)) {
+        return NextResponse.json(formatErrorResponse(new Error("Forbidden")), { status: 403 });
       }
     }
 
-    if (data.value && !canEditTranslation(session.user.role, existing.state, existing.createdBy, session.user.id)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (data.value && !canEditTranslation(session.user.role, existingTranslation.state, existingTranslation.createdBy, session.user.id)) {
+      return NextResponse.json(formatErrorResponse(new Error("Forbidden")), { status: 403 });
     }
 
     // Save to history before updating
     await db.insert(translationHistory).values({
       id: nanoid(),
       translationId: id,
-      value: data.value || existing.value,
-      state: data.state || existing.state,
+      value: data.value || existingTranslation.value,
+      state: data.state || existingTranslation.state,
       changedBy: session.user.id,
     });
 
@@ -62,11 +73,101 @@ export async function PATCH(
       .update(translations)
       .set({
         ...data,
-        reviewedBy: data.state === "approved" ? session.user.id : existing.reviewedBy,
+        reviewedBy: data.state === "approved" ? session.user.id : existingTranslation.reviewedBy,
         updatedAt: new Date(),
       })
       .where(eq(translations.id, id))
       .returning();
+
+    // Invalidate cache when translation is updated or approved
+    if (key && (data.value || data.state === "approved")) {
+      const { invalidateTranslationCache } = await import("@/lib/cache/invalidation");
+      const { languages } = await import("@/lib/db/schema");
+      const [language] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, updated.languageId))
+        .limit(1);
+      
+      if (language) {
+        await invalidateTranslationCache(key.projectId, language.code);
+      }
+    }
+
+    // Get project ID for notifications
+    const [key] = await db
+      .select()
+      .from(translationKeys)
+      .where(eq(translationKeys.id, updated.keyId))
+      .limit(1);
+
+    // Trigger notifications based on state changes
+    if (key && data.state && data.state !== existingTranslation.state) {
+      const { notifyReviewRequest, notifyTranslationApproved, notifyTranslationRejected } = await import("@/lib/notifications/triggers");
+      
+      if (data.state === "review") {
+        await notifyReviewRequest(id, key.projectId);
+      } else if (data.state === "approved") {
+        await notifyTranslationApproved(id, key.projectId);
+      } else if (data.state === "draft" && existingTranslation.state === "review") {
+        // Translation was rejected (moved back to draft from review)
+        await notifyTranslationRejected(id, key.projectId);
+      }
+    }
+
+    // Dispatch webhook events
+    if (key) {
+      const { dispatchWebhookEvent } = await import("@/lib/webhooks/dispatcher");
+      const { createWebhookEvent } = await import("@/lib/webhooks/events");
+      
+      // Get language code for webhook payload
+      const { languages } = await import("@/lib/db/schema");
+      const [language] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, updated.languageId))
+        .limit(1);
+
+      if (data.value && data.value !== existingTranslation.value) {
+        // Translation updated
+        const event = createWebhookEvent("translation.updated", key.projectId, {
+          translationId: id,
+          keyId: updated.keyId,
+          key: key.key,
+          languageCode: language?.code || "",
+          oldValue: existingTranslation.value,
+          newValue: updated.value,
+          state: updated.state,
+          updatedBy: session.user.id,
+        });
+        await dispatchWebhookEvent(key.projectId, event);
+      }
+
+      if (data.state && data.state !== existingTranslation.state) {
+        if (data.state === "approved") {
+          const event = createWebhookEvent("translation.approved", key.projectId, {
+            translationId: id,
+            keyId: updated.keyId,
+            key: key.key,
+            languageCode: language?.code || "",
+            value: updated.value,
+            approvedBy: session.user.id,
+          });
+          await dispatchWebhookEvent(key.projectId, event);
+        } else if (data.state === "draft" && existingTranslation.state === "review") {
+          // Translation rejected
+          const event = createWebhookEvent("translation.rejected", key.projectId, {
+            translationId: id,
+            keyId: updated.keyId,
+            key: key.key,
+            languageCode: language?.code || "",
+            value: updated.value,
+            rejectedBy: session.user.id,
+          });
+          await dispatchWebhookEvent(key.projectId, event);
+        }
+      }
+    }
 
     // If approved, add to translation memory
     if (data.state === "approved" && updated) {
@@ -89,13 +190,10 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error updating translation:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -108,26 +206,31 @@ export async function GET(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const [translation] = await db
-      .select()
+    // Get translation with key to verify project access
+    const [translationData] = await db
+      .select({
+        translation: translations,
+        key: translationKeys,
+      })
       .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
       .where(eq(translations.id, id))
       .limit(1);
 
-    if (!translation) {
-      return NextResponse.json({ error: "Translation not found" }, { status: 404 });
+    if (!translationData) {
+      return NextResponse.json(formatErrorResponse(new Error("Translation not found")), { status: 404 });
     }
 
-    return NextResponse.json(translation);
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, translationData.key.projectId);
+
+    return NextResponse.json(translationData.translation);
   } catch (error) {
     console.error("Error fetching translation:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

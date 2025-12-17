@@ -5,6 +5,8 @@ import { keyScreenshots, translationKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { formatErrorResponse, AuthenticationError, ValidationError, NotFoundError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const createScreenshotSchema = z.object({
   keyId: z.string(),
@@ -17,13 +19,13 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = createScreenshotSchema.parse(body);
 
-    // Verify key exists
+    // Verify key exists and user has access to project
     const [key] = await db
       .select()
       .from(translationKeys)
@@ -31,8 +33,11 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!key) {
-      return NextResponse.json({ error: "Translation key not found" }, { status: 404 });
+      return NextResponse.json(formatErrorResponse(new NotFoundError("Translation key")), { status: 404 });
     }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, key.projectId);
 
     const [screenshot] = await db
       .insert(keyScreenshots)
@@ -48,13 +53,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(screenshot, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error creating screenshot:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -63,14 +65,28 @@ export async function GET(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const keyId = request.nextUrl.searchParams.get("keyId");
 
     if (!keyId) {
-      return NextResponse.json({ error: "keyId is required" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("keyId is required")), { status: 400 });
     }
+
+    // Verify key exists and user has access to project
+    const [key] = await db
+      .select()
+      .from(translationKeys)
+      .where(eq(translationKeys.id, keyId))
+      .limit(1);
+
+    if (!key) {
+      return NextResponse.json(formatErrorResponse(new NotFoundError("Translation key")), { status: 404 });
+    }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, key.projectId);
 
     const screenshots = await db
       .select()
@@ -80,10 +96,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(screenshots);
   } catch (error) {
     console.error("Error fetching screenshots:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

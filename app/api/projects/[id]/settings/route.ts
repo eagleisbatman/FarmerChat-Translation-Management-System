@@ -5,6 +5,7 @@ import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { formatErrorResponse, ValidationError, NotFoundError, AuthorizationError, AuthenticationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const settingsSchema = z.object({
   requiresReview: z.boolean().optional(),
@@ -25,22 +26,11 @@ export async function PATCH(
       throw new AuthenticationError("Authentication required");
     }
 
-    if (session.user.role !== "admin") {
-      throw new AuthorizationError("Only admins can update project settings");
-    }
-
     const body = await request.json();
     const data = settingsSchema.parse(body);
 
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, id))
-      .limit(1);
-
-    if (!project) {
-      throw new NotFoundError("Project");
-    }
+    // Verify user has admin access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, id, true);
 
     // Update project settings
     await db

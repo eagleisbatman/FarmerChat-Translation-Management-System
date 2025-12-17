@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/notification-bell";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -87,7 +88,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <SidebarHeader className="border-b">
           <div className="flex items-center gap-2 px-4 py-3">
             <LayoutDashboard className="h-6 w-6 text-primary" />
-            <span className="font-semibold text-lg">TMS</span>
+            <span className="font-semibold text-lg">LinguaFlow</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -171,6 +172,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 lg:ml-0">
+        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center justify-end gap-4 px-4 lg:px-8">
+            <NotificationBell />
+          </div>
+        </header>
         <main className="p-4 lg:p-8">{children}</main>
       </div>
 

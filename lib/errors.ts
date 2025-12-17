@@ -36,6 +36,13 @@ export class AuthorizationError extends AppError {
   }
 }
 
+export class ForbiddenError extends AuthorizationError {
+  constructor(message: string = "Forbidden", userMessage?: string) {
+    super(message, userMessage || "You don't have permission to access this resource.");
+    this.name = "ForbiddenError";
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(resource: string, userMessage?: string) {
     super(`${resource} not found`, "NOT_FOUND", 404, userMessage || `The requested ${resource} could not be found.`);

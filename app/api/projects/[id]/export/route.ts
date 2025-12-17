@@ -4,6 +4,14 @@ import { db } from "@/lib/db";
 import { projects, translationKeys, translations, languages, projectLanguages } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { exportToXLIFF12, exportToXLIFF20 } from "@/lib/formats/xliff";
+import { exportToGettext } from "@/lib/formats/gettext";
+import { exportToStrings } from "@/lib/formats/strings";
+import { exportToARB } from "@/lib/formats/arb";
+import { exportToAndroidXML } from "@/lib/formats/android-xml";
+import { exportToRESX } from "@/lib/formats/resx";
+import { exportToYAML } from "@/lib/formats/yaml";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 export async function GET(
   request: NextRequest,
@@ -16,19 +24,11 @@ export async function GET(
     const lang = request.nextUrl.searchParams.get("lang");
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    // Get project
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, id))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    // Verify user has access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, id);
 
     // Get all approved translations
     const conditions = [
@@ -115,7 +115,7 @@ export async function GET(
         .limit(1);
 
       if (!sourceLang) {
-        return NextResponse.json({ error: "Source language not found" }, { status: 400 });
+        return NextResponse.json(formatErrorResponse(new ValidationError("Source language not found")), { status: 400 });
       }
 
       // Extract unique key IDs from translations
@@ -182,13 +182,150 @@ export async function GET(
       });
     }
 
-    return NextResponse.json({ error: "Unsupported format" }, { status: 400 });
+    if (format === "po" || format === "pot") {
+      if (allTranslations.length === 0) {
+        return NextResponse.json(
+          { error: "No approved translations found for export" },
+          { status: 404 }
+        );
+      }
+
+      const [sourceLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, project.defaultLanguageId || ""))
+        .limit(1);
+
+      if (!sourceLang) {
+        return NextResponse.json(formatErrorResponse(new ValidationError("Source language not found")), { status: 400 });
+      }
+
+      const targetLangCode = lang || allTranslations[0]?.language || "en";
+      const [targetLang] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.code, targetLangCode))
+        .limit(1);
+
+      const poData = exportToGettext(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value, // For now, use value as source
+          target: t.value,
+          description: t.description || undefined,
+          namespace: t.namespace || undefined,
+        })),
+        sourceLang.code,
+        targetLang?.code || targetLangCode
+      );
+
+      return new NextResponse(poData, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${project.name}-${targetLangCode}.po"`,
+        },
+      });
+    }
+
+    if (format === "strings") {
+      const stringsData = exportToStrings(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          description: t.description || undefined,
+        }))
+      );
+
+      return new NextResponse(stringsData, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${project.name}.strings"`,
+        },
+      });
+    }
+
+    if (format === "arb") {
+      const targetLangCode = lang || allTranslations[0]?.language || "en";
+      const arbData = exportToARB(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          description: t.description || undefined,
+          namespace: t.namespace || undefined,
+        })),
+        targetLangCode
+      );
+
+      return new NextResponse(arbData, {
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="${project.name}-${targetLangCode}.arb"`,
+        },
+      });
+    }
+
+    if (format === "android-xml") {
+      const androidData = exportToAndroidXML(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          description: t.description || undefined,
+        }))
+      );
+
+      return new NextResponse(androidData, {
+        headers: {
+          "Content-Type": "application/xml",
+          "Content-Disposition": `attachment; filename="${project.name}-strings.xml"`,
+        },
+      });
+    }
+
+    if (format === "resx") {
+      const resxData = exportToRESX(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          description: t.description || undefined,
+        }))
+      );
+
+      return new NextResponse(resxData, {
+        headers: {
+          "Content-Type": "application/xml",
+          "Content-Disposition": `attachment; filename="${project.name}.resx"`,
+        },
+      });
+    }
+
+    if (format === "yaml" || format === "yml") {
+      const targetLangCode = lang || allTranslations[0]?.language || "en";
+      const yamlData = exportToYAML(
+        allTranslations.map((t) => ({
+          key: t.key,
+          source: t.value,
+          target: t.value,
+          namespace: t.namespace || undefined,
+        })),
+        targetLangCode
+      );
+
+      return new NextResponse(yamlData, {
+        headers: {
+          "Content-Type": "text/yaml",
+          "Content-Disposition": `attachment; filename="${project.name}-${targetLangCode}.yml"`,
+        },
+      });
+    }
+
+    return NextResponse.json(formatErrorResponse(new ValidationError(`Unsupported format: ${format}`)), { status: 400 });
   } catch (error) {
     console.error("Error exporting translations:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

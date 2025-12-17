@@ -6,7 +6,9 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { AutoTranslateService } from "@/lib/auto-translate";
 import { handleQueueError, getQueueHealth } from "@/lib/queue-error-handler";
-import { formatErrorResponse } from "@/lib/errors";
+import { formatErrorResponse, AuthenticationError, ForbiddenError } from "@/lib/errors";
+import { verifyProjectAccess, getUserOrganizations } from "@/lib/security/organization-access";
+import { inArray } from "drizzle-orm";
 
 /**
  * Process pending translation queue items
@@ -17,22 +19,47 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     // Only admins can trigger queue processing
     if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(formatErrorResponse(new ForbiddenError("Only admins can process translation queue")), { status: 403 });
+    }
+
+    // Get user's organizations to filter queue items
+    const userOrgs = await getUserOrganizations(session.user.id);
+    const orgIds = userOrgs.map((o) => o.organization.id);
+    
+    if (orgIds.length === 0) {
+      return NextResponse.json({ message: "No pending translations to process" });
+    }
+
+    // Get projects in user's organizations
+    const userProjects = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(inArray(projects.organizationId, orgIds));
+    
+    const projectIds = userProjects.map((p) => p.id);
+    
+    if (projectIds.length === 0) {
+      return NextResponse.json({ message: "No pending translations to process" });
     }
 
     const body = await request.json();
     const batchSize = body.batchSize || 10; // Process 10 at a time by default
 
-    // Get pending queue items
+    // Get pending queue items for user's projects only
     const pendingItems = await db
       .select()
       .from(translationQueue)
-      .where(eq(translationQueue.status, "pending"))
+      .where(
+        and(
+          eq(translationQueue.status, "pending"),
+          inArray(translationQueue.projectId, projectIds)
+        )
+      )
       .limit(batchSize);
 
     if (pendingItems.length === 0) {
@@ -49,6 +76,9 @@ export async function POST(request: NextRequest) {
     // Process each item
     for (const item of pendingItems) {
       try {
+        // Verify user still has access to this project (double-check)
+        await verifyProjectAccess(session.user.id, item.projectId);
+
         // Mark as processing
         await db
           .update(translationQueue)
@@ -147,6 +177,65 @@ export async function POST(request: NextRequest) {
       }
 
       results.processed++;
+    }
+
+    // Notify user when batch completes (if any items were processed)
+    if (results.processed > 0 && pendingItems.length > 0) {
+      // Get the project ID from the first item
+      const firstItem = pendingItems[0];
+      const { notifyQueueCompleted } = await import("@/lib/notifications/triggers");
+      
+      // Notify the user who created the queue items (or current user if admin triggered)
+      const userIdToNotify = session.user.id; // Admin who triggered the batch
+      
+      await notifyQueueCompleted(
+        userIdToNotify,
+        firstItem.projectId,
+        results.succeeded,
+        results.failed
+      );
+
+      // Dispatch webhook events grouped by project
+      const { dispatchWebhookEvent } = await import("@/lib/webhooks/dispatcher");
+      const { createWebhookEvent } = await import("@/lib/webhooks/events");
+      
+      // Group queue items by project
+      const projectStats = new Map<string, { succeeded: number; failed: number; total: number }>();
+      for (const item of pendingItems) {
+        const stats = projectStats.get(item.projectId) || { succeeded: 0, failed: 0, total: 0 };
+        stats.total++;
+        if (item.status === "completed") {
+          stats.succeeded++;
+        } else if (item.status === "failed") {
+          stats.failed++;
+        }
+        projectStats.set(item.projectId, stats);
+      }
+
+      // Dispatch webhook for each project
+      for (const [projectId, stats] of projectStats.entries()) {
+        if (stats.failed === 0) {
+          // Queue completed successfully
+          const event = createWebhookEvent("queue.completed", projectId, {
+            queueId: `batch_${Date.now()}`,
+            totalItems: stats.total,
+            completedItems: stats.succeeded,
+            failedItems: 0,
+            completedBy: session.user.id,
+          });
+          await dispatchWebhookEvent(projectId, event);
+        } else {
+          // Queue completed with failures
+          const event = createWebhookEvent("queue.failed", projectId, {
+            queueId: `batch_${Date.now()}`,
+            totalItems: stats.total,
+            completedItems: stats.succeeded,
+            failedItems: stats.failed,
+            error: `${stats.failed} items failed to translate`,
+          });
+          await dispatchWebhookEvent(projectId, event);
+        }
+      }
     }
 
     const health = await getQueueHealth();

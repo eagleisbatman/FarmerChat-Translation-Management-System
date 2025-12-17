@@ -12,8 +12,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Translation Management System",
-  description: "A modern translation management system for managing multilingual content",
+  title: "LinguaFlow - Translation Management System",
+  description: "LinguaFlow - Seamless Translation Management. Enterprise-grade TMS with AI-powered workflows for managing multilingual content.",
 };
 
 export default function RootLayout({

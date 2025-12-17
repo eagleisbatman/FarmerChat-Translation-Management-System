@@ -6,6 +6,8 @@ import { eq, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { AutoTranslateService } from "@/lib/auto-translate";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess, getUserOrganizations } from "@/lib/security/organization-access";
 
 const createQueueSchema = z.object({
   projectId: z.string(),
@@ -18,22 +20,14 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = createQueueSchema.parse(body);
 
-    // Verify project exists
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, data.projectId))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    // Verify user has access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, data.projectId);
 
     // Get source language
     const [sourceLang] = await db
@@ -43,7 +37,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!sourceLang) {
-      return NextResponse.json({ error: "Source language not found" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("Source language not found")), { status: 400 });
     }
 
     // Get all keys and their source translations
@@ -119,13 +113,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error creating translation queue:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -134,12 +125,50 @@ export async function GET(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const { searchParams } = request.nextUrl;
     const projectId = searchParams.get("projectId");
     const status = searchParams.get("status");
+
+    // If projectId is provided, verify access
+    if (projectId) {
+      await verifyProjectAccess(session.user.id, projectId);
+    } else {
+      // If no projectId, filter by user's organizations
+      const userOrgs = await getUserOrganizations(session.user.id);
+      const orgIds = userOrgs.map((o) => o.organization.id);
+      
+      if (orgIds.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      // Get projects in user's organizations
+      const userProjects = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(inArray(projects.organizationId, orgIds));
+      
+      const projectIds = userProjects.map((p) => p.id);
+      
+      if (projectIds.length === 0) {
+        return NextResponse.json([]);
+      }
+
+      const conditions = [inArray(translationQueue.projectId, projectIds)];
+      if (status) {
+        conditions.push(eq(translationQueue.status, status as any));
+      }
+
+      const queue = await db
+        .select()
+        .from(translationQueue)
+        .where(and(...conditions))
+        .orderBy(translationQueue.createdAt);
+
+      return NextResponse.json(queue);
+    }
 
     const conditions = [];
     if (projectId) {
@@ -160,10 +189,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(queue);
   } catch (error) {
     console.error("Error fetching translation queue:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { projectMembers, projects, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const addMemberSchema = z.object({
   userId: z.string(),
@@ -22,23 +24,11 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     const body = await request.json();
     const data = addMemberSchema.parse(body);
 
-    // Verify project exists
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, id))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    // Verify user has admin access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, id, true);
 
     // Verify user exists
     const [user] = await db

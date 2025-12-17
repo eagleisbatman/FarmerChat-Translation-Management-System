@@ -6,6 +6,8 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { fetchFigmaTextNodes, figmaNodesToTranslationKeys } from "@/lib/formats/figma";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const figmaImportSchema = z.object({
   accessToken: z.string().min(1),
@@ -22,22 +24,14 @@ export async function POST(
     const { id: projectId } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = figmaImportSchema.parse(body);
 
-    // Verify project exists
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    // Verify user has access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, projectId);
 
     // Get default language
     const [defaultLang] = await db
@@ -47,7 +41,7 @@ export async function POST(
       .limit(1);
 
     if (!defaultLang) {
-      return NextResponse.json({ error: "Default language not found" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("Default language not found")), { status: 400 });
     }
 
     // Fetch text nodes from Figma
@@ -125,13 +119,10 @@ export async function POST(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error importing from Figma:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to import from Figma" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

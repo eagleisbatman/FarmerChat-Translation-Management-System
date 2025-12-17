@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { TranslationMemoryService } from "@/lib/translation-memory";
 import { z } from "zod";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const findSimilarSchema = z.object({
   sourceText: z.string().min(1),
@@ -16,11 +18,14 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = findSimilarSchema.parse(body);
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, data.projectId);
 
     const memoryService = new TranslationMemoryService();
     const matches = await memoryService.findSimilar(
@@ -34,13 +39,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ matches });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error finding translation memory:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

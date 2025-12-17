@@ -1,12 +1,13 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderKanban } from "lucide-react";
+import { getUserOrganizations } from "@/lib/security/organization-access";
 
 export default async function ProjectsPage() {
   const session = await auth();
@@ -15,7 +16,13 @@ export default async function ProjectsPage() {
     redirect("/signin");
   }
 
-  const allProjects = await db.select().from(projects);
+  // Get user's organizations and filter projects
+  const userOrgs = await getUserOrganizations(session.user.id);
+  const orgIds = userOrgs.map((o) => o.organization.id);
+
+  const allProjects = orgIds.length > 0
+    ? await db.select().from(projects).where(inArray(projects.organizationId, orgIds))
+    : [];
 
   return (
     <div className="space-y-6">

@@ -1,10 +1,12 @@
-# FarmerChat Translation Management System
+# LinguaFlow
 
-A modern, enterprise-grade Translation Management System (TMS) built for the FarmerChat Platform. This system enables seamless management of multilingual content across multiple mobile and web applications with advanced features like AI-powered translation, translation memory, and collaborative workflows.
+**Seamless Translation Management**
+
+A modern, enterprise-grade Translation Management System (TMS) that enables seamless management of multilingual content across multiple applications with advanced features like AI-powered translation, translation memory, and collaborative workflows.
 
 ## 🌟 About
 
-The FarmerChat Translation Management System is a comprehensive solution for managing translations across all FarmerChat Platform applications. Built with modern web technologies, it provides a clean, intuitive interface for translators and reviewers while offering robust API access for developers.
+LinguaFlow is a comprehensive solution for managing translations across multiple projects and applications. Built with modern web technologies, it provides a clean, intuitive interface for translators and reviewers while offering robust API access for developers.
 
 ### Key Highlights
 
@@ -58,7 +60,7 @@ The FarmerChat Translation Management System is a comprehensive solution for man
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd farmer-chat-tms
+   cd linguaflow-tms
    ```
 
 2. **Install dependencies**
@@ -74,7 +76,7 @@ The FarmerChat Translation Management System is a comprehensive solution for man
    Fill in your environment variables:
    ```env
    # Database
-   DATABASE_URL=postgresql://user:password@localhost:5432/farmer_chat_tms
+   DATABASE_URL=postgresql://user:password@localhost:5432/linguaflow
    
    # Authentication
    NEXTAUTH_SECRET=your-secret-key-here
@@ -106,6 +108,68 @@ The FarmerChat Translation Management System is a comprehensive solution for man
    ```
 
 Visit `http://localhost:3000` to access the application.
+
+## 🛠️ CLI Tool
+
+LinguaFlow includes a powerful CLI tool for managing translations from the command line and agentic IDEs.
+
+### Installation
+
+```bash
+npm install -g @linguaflow/cli
+```
+
+### Quick Start
+
+```bash
+# Login (opens browser for OAuth)
+linguaflow login
+
+# Set default project
+linguaflow project set <project-id>
+
+# Pull translations
+linguaflow pull --lang en --output translations.json
+
+# Push translations
+linguaflow push --file translations.json
+
+# Sync (pull + merge + push)
+linguaflow sync
+```
+
+### Features
+
+- **OAuth Authentication**: Browser-based login flow (like Railway CLI)
+- **Token Management**: Secure token storage (90-day expiry)
+- **Change Detection**: Automatically detects and merges changes
+- **Deprecation Support**: Mark keys as deprecated
+- **Automatic Notifications**: Translators are notified when translations are updated
+- **Agentic IDE Support**: Works seamlessly with Cursor, Claude Code, and other IDEs
+
+See [`cli/README.md`](./cli/README.md) for complete documentation.
+
+## 🤖 MCP Server
+
+Model Context Protocol server for AI assistant integration.
+
+### Installation
+
+```bash
+npm install -g @linguaflow/mcp-server
+```
+
+### Setup in Cursor/Claude Code
+
+Configure the MCP server in your IDE settings to enable AI assistants to manage translations automatically.
+
+**Available Tools**:
+- `get_translations` - Fetch translations
+- `update_translations` - Update translations (auto-notifies translators)
+- `sync_translations` - Sync translations (pull + merge + push)
+- `detect_changes` - Detect differences between local and server
+
+See [`mcp-server/README.md`](./mcp-server/README.md) for setup instructions.
 
 ## 📚 API Documentation
 
@@ -177,7 +241,7 @@ curl -H "Authorization: Bearer your-session-token" \
 ## 🏗️ Project Structure
 
 ```
-farmer_chat_tms/
+linguaflow-tms/
 ├── app/                    # Next.js app directory
 │   ├── (auth)/            # Authentication pages
 │   ├── (dashboard)/      # Dashboard pages
@@ -241,23 +305,16 @@ The start command (`npm start`) automatically runs migrations before starting th
 
 ## 🤝 Contributing
 
-This project is part of the FarmerChat Platform. For contributions, please follow the development guidelines in `.cursorrules`.
+For contributions, please follow the development guidelines in `.cursorrules`.
 
 ## 📄 License
 
 MIT License - See LICENSE file for details
 
-## 🔗 Related Projects
-
-This TMS is part of the FarmerChat Platform ecosystem, managing translations for:
-- FarmerChat Mobile Applications
-- FarmerChat Web Platform
-- Related services and tools
-
 ## 📞 Support
 
-For issues, questions, or feature requests, please contact the FarmerChat Platform team.
+For issues, questions, or feature requests, please open an issue in the repository.
 
 ---
 
-**Built with ❤️ for the FarmerChat Platform**
+**LinguaFlow - Seamless Translation Management**

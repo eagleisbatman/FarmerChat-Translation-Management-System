@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { nanoid } from "nanoid";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const updateProjectSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -24,12 +24,11 @@ export async function PATCH(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Verify user has admin access to project's organization
+    const { project, access } = await verifyProjectAccess(session.user.id, id, true);
 
     const body = await request.json();
     const data = updateProjectSchema.parse(body);
@@ -44,19 +43,20 @@ export async function PATCH(
       .returning();
 
     if (!updated) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      return NextResponse.json(formatErrorResponse(new Error("Project not found")), { status: 404 });
     }
+
+    // Invalidate cache
+    const { invalidateProjectCache } = await import("@/lib/cache/invalidation");
+    await invalidateProjectCache(id);
 
     return NextResponse.json(updated);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error updating project:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -69,26 +69,29 @@ export async function GET(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, id))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    // Check cache first
+    const { Cache, CacheKeys, CacheTTL } = await import("@/lib/cache");
+    const cache = new Cache();
+    const cacheKey = CacheKeys.project(id);
+    
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
+
+    // Verify user has access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, id);
+
+    // Cache for 5 minutes
+    await cache.set(cacheKey, project, CacheTTL.MEDIUM);
 
     return NextResponse.json(project);
   } catch (error) {
     console.error("Error fetching project:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

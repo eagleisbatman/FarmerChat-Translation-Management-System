@@ -6,6 +6,8 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { canCreateTranslation } from "@/lib/workflow";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const createTranslationSchema = z.object({
   projectId: z.string(),
@@ -20,15 +22,18 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     if (!canCreateTranslation(session.user.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(formatErrorResponse(new Error("Forbidden")), { status: 403 });
     }
 
     const body = await request.json();
     const data = createTranslationSchema.parse(body);
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, data.projectId);
 
     // Verify key belongs to project
     const [key] = await db
@@ -43,7 +48,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!key) {
-      return NextResponse.json({ error: "Invalid key or project" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("Invalid key or project")), { status: 400 });
     }
 
     // Check if translation already exists
@@ -85,17 +90,42 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
+      // Dispatch webhook event for translation creation
+      const { dispatchWebhookEvent } = await import("@/lib/webhooks/dispatcher");
+      const { createWebhookEvent } = await import("@/lib/webhooks/events");
+      const { languages } = await import("@/lib/db/schema");
+      
+      const [language] = await db
+        .select()
+        .from(languages)
+        .where(eq(languages.id, data.languageId))
+        .limit(1);
+
+      const event = createWebhookEvent("translation.created", data.projectId, {
+        translationId: newTranslation.id,
+        keyId: data.keyId,
+        key: key.key,
+        languageCode: language?.code || "",
+        value: data.value,
+        state: data.state,
+        createdBy: session.user.id,
+      });
+      await dispatchWebhookEvent(data.projectId, event);
+
+      // Invalidate cache if translation is approved
+      if (data.state === "approved" && language) {
+        const { invalidateTranslationCache } = await import("@/lib/cache/invalidation");
+        await invalidateTranslationCache(data.projectId, language.code);
+      }
+
       return NextResponse.json(newTranslation, { status: 201 });
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error creating translation:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

@@ -56,7 +56,7 @@ export function exportToXLIFF12(
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file original="" source-language="${sourceLanguage}" target-language="${targetLanguage}" datatype="plaintext">
     <header>
-      <tool tool-id="farmerchat-tms" tool-name="FarmerChat Translation Management System"/>
+      <tool tool-id="linguaflow" tool-name="LinguaFlow - Seamless Translation Management"/>
     </header>
     <body>
 ${units}

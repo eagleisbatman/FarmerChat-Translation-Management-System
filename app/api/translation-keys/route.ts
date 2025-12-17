@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { translationKeys, projects } from "@/lib/db/schema";
+import { translationKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const createKeySchema = z.object({
   projectId: z.string(),
@@ -18,26 +20,18 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     if (session.user.role !== "admin" && session.user.role !== "translator") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(formatErrorResponse(new Error("Forbidden")), { status: 403 });
     }
 
     const body = await request.json();
     const data = createKeySchema.parse(body);
 
-    // Verify project exists
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, data.projectId))
-      .limit(1);
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, data.projectId);
 
     // Check if key already exists
     const existingKeys = await db
@@ -65,16 +59,26 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    // Dispatch webhook event for key creation
+    const { dispatchWebhookEvent } = await import("@/lib/webhooks/dispatcher");
+    const { createWebhookEvent } = await import("@/lib/webhooks/events");
+    
+    const event = createWebhookEvent("key.created", data.projectId, {
+      keyId: newKey.id,
+      key: newKey.key,
+      namespace: newKey.namespace || undefined,
+      description: newKey.description || undefined,
+      createdBy: session.user.id,
+    });
+    await dispatchWebhookEvent(data.projectId, event);
+
     return NextResponse.json(newKey, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error creating translation key:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -83,14 +87,17 @@ export async function GET(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const projectId = request.nextUrl.searchParams.get("projectId");
 
     if (!projectId) {
-      return NextResponse.json({ error: "projectId is required" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("projectId is required")), { status: 400 });
     }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, projectId);
 
     const keys = await db
       .select()
@@ -100,10 +107,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(keys);
   } catch (error) {
     console.error("Error fetching translation keys:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

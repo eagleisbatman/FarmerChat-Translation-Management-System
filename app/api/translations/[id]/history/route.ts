@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { translationHistory, translations, users } from "@/lib/db/schema";
+import { translationHistory, translations, users, translationKeys } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
+import { formatErrorResponse, AuthenticationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 export async function GET(
   request: NextRequest,
@@ -13,19 +15,26 @@ export async function GET(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    // Verify translation exists
-    const [translation] = await db
-      .select()
+    // Get translation with key to verify project access
+    const [translationData] = await db
+      .select({
+        translation: translations,
+        key: translationKeys,
+      })
       .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
       .where(eq(translations.id, id))
       .limit(1);
 
-    if (!translation) {
-      return NextResponse.json({ error: "Translation not found" }, { status: 404 });
+    if (!translationData) {
+      return NextResponse.json(formatErrorResponse(new Error("Translation not found")), { status: 404 });
     }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, translationData.key.projectId);
 
     // Get history
     const history = await db
@@ -45,10 +54,7 @@ export async function GET(
     return NextResponse.json(history);
   } catch (error) {
     console.error("Error fetching translation history:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

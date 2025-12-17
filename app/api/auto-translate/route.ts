@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { projects, languages, keyScreenshots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { formatErrorResponse, ValidationError, NotFoundError, ExternalServiceError } from "@/lib/errors";
+import { formatErrorResponse, ValidationError, NotFoundError, ExternalServiceError, AuthenticationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const translateSchema = z.object({
   projectId: z.string(),
@@ -23,18 +24,14 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = translateSchema.parse(body);
 
-    // Get project to check AI provider settings
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, data.projectId))
-      .limit(1);
+    // Verify user has access to project's organization
+    const { project } = await verifyProjectAccess(session.user.id, data.projectId);
 
     if (!project) {
       throw new NotFoundError("Project");

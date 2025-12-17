@@ -4,6 +4,7 @@ import { rateLimit, getRateLimitIdentifier } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { translations, translationKeys, languages, projects } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { formatErrorResponse } from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,6 +44,24 @@ export async function GET(request: NextRequest) {
 
     const lang = request.nextUrl.searchParams.get("lang");
     const namespace = request.nextUrl.searchParams.get("namespace");
+
+    // Check cache first (only for approved translations, which are stable)
+    const { Cache, CacheKeys, CacheTTL } = await import("@/lib/cache");
+    const cache = new Cache();
+    const cacheKey = CacheKeys.projectTranslations(projectId, lang || undefined);
+    
+    const cached = await cache.get<Record<string, Record<string, string>>>(cacheKey);
+    if (cached) {
+      // Apply namespace filter if needed
+      if (namespace) {
+        const filtered: Record<string, Record<string, string>> = {};
+        if (cached[namespace]) {
+          filtered[namespace] = cached[namespace];
+        }
+        return addRateLimitHeaders(NextResponse.json(filtered));
+      }
+      return addRateLimitHeaders(NextResponse.json(cached));
+    }
 
     // Build base conditions
     const conditions = [
@@ -88,6 +107,9 @@ export async function GET(request: NextRequest) {
       }
       responseData[ns][row.key] = row.value;
     }
+
+    // Cache for 1 hour (approved translations are stable)
+    await cache.set(cacheKey, responseData, CacheTTL.LONG);
 
     // Helper to add rate limit headers
     const addRateLimitHeaders = (res: NextResponse) => {

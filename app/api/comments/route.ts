@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { comments, translations, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { comments, translations, users, translationKeys, projects, projectMembers } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { parseMentions } from "@/lib/utils/mentions";
+import { notifyCommentMention } from "@/lib/notifications/triggers";
+import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 const createCommentSchema = z.object({
   translationId: z.string(),
@@ -16,22 +20,64 @@ export async function POST(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const body = await request.json();
     const data = createCommentSchema.parse(body);
 
-    // Verify translation exists
-    const [translation] = await db
-      .select()
+    // Get project ID from translation and verify access
+    const translationWithKey = await db
+      .select({
+        translation: translations,
+        key: translationKeys,
+      })
       .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
       .where(eq(translations.id, data.translationId))
       .limit(1);
 
-    if (!translation) {
-      return NextResponse.json({ error: "Translation not found" }, { status: 404 });
+    if (!translationWithKey || translationWithKey.length === 0) {
+      return NextResponse.json(formatErrorResponse(new ValidationError("Translation not found")), { status: 404 });
     }
+
+    const projectId = translationWithKey[0].key.projectId;
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, projectId);
+
+    // Get all users in the project (members + all users for autocomplete)
+    const [projectMembersData] = await db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, projectId))
+      .limit(1);
+
+    // Get project members
+    const members = await db
+      .select({
+        userId: projectMembers.userId,
+        user: users,
+      })
+      .from(projectMembers)
+      .innerJoin(users, eq(projectMembers.userId, users.id))
+      .where(eq(projectMembers.projectId, projectId));
+
+    // Also get all users (for broader @mention support)
+    const allUsers = await db.select().from(users);
+
+    // Create user map for mention parsing
+    const userMap = new Map<string, { id: string; name: string; email: string }>();
+    allUsers.forEach((user) => {
+      userMap.set(user.id, {
+        id: user.id,
+        name: user.name || "",
+        email: user.email || "",
+      });
+    });
+
+    // Parse mentions from comment content
+    const mentionedUserIds = parseMentions(data.content, userMap);
 
     const [newComment] = await db
       .insert(comments)
@@ -43,16 +89,27 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
+    // Notify mentioned users
+    for (const mentionedUserId of mentionedUserIds) {
+      // Don't notify the comment author
+      if (mentionedUserId !== session.user.id) {
+        await notifyCommentMention(
+          mentionedUserId,
+          newComment.id,
+          data.translationId,
+          projectId,
+          session.user.id
+        );
+      }
+    }
+
     return NextResponse.json(newComment, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError(error.errors[0].message)), { status: 400 });
     }
     console.error("Error creating comment:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
@@ -61,14 +118,32 @@ export async function GET(request: NextRequest) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
     const translationId = request.nextUrl.searchParams.get("translationId");
 
     if (!translationId) {
-      return NextResponse.json({ error: "translationId is required" }, { status: 400 });
+      return NextResponse.json(formatErrorResponse(new ValidationError("translationId is required")), { status: 400 });
     }
+
+    // Get project ID from translation and verify access
+    const [translationWithKey] = await db
+      .select({
+        translation: translations,
+        key: translationKeys,
+      })
+      .from(translations)
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+      .where(eq(translations.id, translationId))
+      .limit(1);
+
+    if (!translationWithKey) {
+      return NextResponse.json(formatErrorResponse(new ValidationError("Translation not found")), { status: 404 });
+    }
+
+    // Verify user has access to project's organization
+    await verifyProjectAccess(session.user.id, translationWithKey.key.projectId);
 
     const allComments = await db
       .select({
@@ -88,10 +163,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(allComments);
   } catch (error) {
     console.error("Error fetching comments:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 

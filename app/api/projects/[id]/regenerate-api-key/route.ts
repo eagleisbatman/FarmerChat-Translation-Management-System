@@ -5,6 +5,8 @@ import { projects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
+import { formatErrorResponse, AuthenticationError } from "@/lib/errors";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 export async function POST(
   request: NextRequest,
@@ -15,15 +17,14 @@ export async function POST(
     const { id } = await params;
 
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    if (session.user.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Verify user has admin access to project's organization
+    await verifyProjectAccess(session.user.id, id, true);
 
     // Generate new API key
-    const newApiKey = `tms_${nanoid(32)}`;
+    const newApiKey = `lf_${nanoid(32)}`; // LinguaFlow API key prefix
     const apiKeyHash = await bcrypt.hash(newApiKey, 10);
 
     const [updated] = await db
@@ -37,16 +38,13 @@ export async function POST(
       .returning();
 
     if (!updated) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      return NextResponse.json(formatErrorResponse(new Error("Project not found")), { status: 404 });
     }
 
     return NextResponse.json({ apiKey: newApiKey });
   } catch (error) {
     console.error("Error regenerating API key:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json(formatErrorResponse(error), { status: 500 });
   }
 }
 
