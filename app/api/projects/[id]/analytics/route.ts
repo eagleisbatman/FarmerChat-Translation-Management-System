@@ -83,15 +83,16 @@ export async function GET(
       .where(eq(translationKeys.projectId, id));
 
     // 3. User contribution metrics
-    // Get users who have contributed to this project
-    const userContributionsRaw = await db
-      .select({
+    // Get users who have contributed to this project (either created or reviewed translations)
+    // We need separate counts: translations created vs reviews completed
+    // Use a query that gets all contributing users, then aggregate properly
+    
+    // Get all unique users who created translations
+    const creators = await db
+      .selectDistinct({
         userId: users.id,
         userName: users.name,
         userEmail: users.email,
-        translationsCreated: sql<number>`COUNT(DISTINCT CASE WHEN ${translations.createdBy} = ${users.id} THEN ${translations.id} END)`,
-        translationsApproved: sql<number>`COUNT(DISTINCT CASE WHEN ${translations.state} = 'approved' AND ${translations.createdBy} = ${users.id} THEN ${translations.id} END)`,
-        reviewsCompleted: sql<number>`COUNT(DISTINCT CASE WHEN ${translations.reviewedBy} = ${users.id} THEN ${translations.id} END)`,
       })
       .from(users)
       .innerJoin(translations, eq(translations.createdBy, users.id))
@@ -101,10 +102,85 @@ export async function GET(
           eq(translationKeys.projectId, id),
           ...dateFilter
         )
-      )
-      .groupBy(users.id, users.name, users.email)
-      .orderBy(desc(sql`COUNT(DISTINCT ${translations.id})`))
-      .limit(10);
+      );
+
+    // Get all unique users who reviewed translations
+    const reviewers = await db
+      .selectDistinct({
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+      })
+      .from(users)
+      .innerJoin(translations, eq(translations.reviewedBy, users.id))
+      .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+      .where(
+        and(
+          eq(translationKeys.projectId, id),
+          sql`${translations.reviewedBy} IS NOT NULL`,
+          ...dateFilter
+        )
+      );
+
+    // Combine and deduplicate users
+    const allUsers = new Map<string, { userId: string; userName: string | null; userEmail: string | null }>();
+    creators.forEach((u) => allUsers.set(u.userId, u));
+    reviewers.forEach((u) => allUsers.set(u.userId, u));
+
+    // Get counts for each user
+    const userContributionsRaw = await Promise.all(
+      Array.from(allUsers.values()).map(async (user) => {
+        // Count translations created by this user
+        const [createdCount] = await db
+          .select({
+            count: sql<number>`COUNT(DISTINCT ${translations.id})`,
+            approved: sql<number>`COUNT(DISTINCT CASE WHEN ${translations.state} = 'approved' THEN ${translations.id} END)`,
+          })
+          .from(translations)
+          .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+          .where(
+            and(
+              eq(translationKeys.projectId, id),
+              eq(translations.createdBy, user.userId),
+              ...dateFilter
+            )
+          );
+
+        // Count reviews completed by this user (reviews of ANY user's translations)
+        const [reviewCount] = await db
+          .select({
+            count: sql<number>`COUNT(DISTINCT ${translations.id})`,
+          })
+          .from(translations)
+          .innerJoin(translationKeys, eq(translations.keyId, translationKeys.id))
+          .where(
+            and(
+              eq(translationKeys.projectId, id),
+              eq(translations.reviewedBy, user.userId),
+              sql`${translations.reviewedBy} IS NOT NULL`,
+              ...dateFilter
+            )
+          );
+
+        return {
+          userId: user.userId,
+          userName: user.userName,
+          userEmail: user.userEmail,
+          translationsCreated: Number(createdCount?.count || 0),
+          translationsApproved: Number(createdCount?.approved || 0),
+          reviewsCompleted: Number(reviewCount?.count || 0),
+        };
+      })
+    );
+
+    // Sort by total contributions and limit to top 10
+    const userContributions = userContributionsRaw
+      .sort((a, b) => {
+        const totalA = a.translationsCreated + a.reviewsCompleted;
+        const totalB = b.translationsCreated + b.reviewsCompleted;
+        return totalB - totalA;
+      })
+      .slice(0, 10);
     
     const userContributions = userContributionsRaw.map((uc) => ({
       userId: uc.userId,
