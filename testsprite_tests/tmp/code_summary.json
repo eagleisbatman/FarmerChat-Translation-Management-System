@@ -1,0 +1,407 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "Next.js 15+",
+    "React 19",
+    "PostgreSQL",
+    "Drizzle ORM",
+    "NextAuth.js v5",
+    "Tailwind CSS",
+    "Shadcn UI",
+    "Zod",
+    "OpenAI API",
+    "Google Gemini API",
+    "Google Cloud Translation API"
+  ],
+  "features": [
+    {
+      "name": "Authentication System",
+      "description": "Google OAuth authentication with domain restrictions, role-based access control, and session management",
+      "files": [
+        "app/(auth)/signin/page.tsx",
+        "app/(auth)/error/page.tsx",
+        "app/api/auth/[...nextauth]/route.ts",
+        "lib/auth.ts",
+        "lib/auth-config.ts",
+        "lib/organizations/auth.ts"
+      ]
+    },
+    {
+      "name": "Project Management",
+      "description": "Create, view, update, and manage translation projects with API keys, languages, and member management",
+      "files": [
+        "app/(dashboard)/projects/page.tsx",
+        "app/(dashboard)/projects/new/page.tsx",
+        "app/(dashboard)/projects/[id]/page.tsx",
+        "app/(dashboard)/projects/[id]/settings/page.tsx",
+        "app/api/projects/route.ts",
+        "app/api/projects/[id]/route.ts",
+        "app/api/projects/[id]/settings/route.ts",
+        "app/api/projects/[id]/regenerate-api-key/route.ts",
+        "app/api/projects/[id]/members/route.ts",
+        "components/create-project-form.tsx",
+        "components/project-settings-form.tsx",
+        "components/project-member-manager.tsx",
+        "components/api-key-card.tsx",
+        "components/copy-api-key-button.tsx",
+        "components/regenerate-api-key-button.tsx"
+      ]
+    },
+    {
+      "name": "Translation Editor",
+      "description": "Main grid-based translation editor with inline editing, state management, search, filters, and bulk operations",
+      "files": [
+        "app/(dashboard)/projects/[id]/translations/page.tsx",
+        "app/(dashboard)/projects/[id]/translations/[keyId]/page.tsx",
+        "components/translation-editor.tsx",
+        "components/translation-filters.tsx",
+        "components/enhanced-search-bar.tsx",
+        "components/bulk-actions.tsx",
+        "components/bulk-operations-panel.tsx",
+        "app/api/translations/route.ts",
+        "app/api/translations/[id]/route.ts",
+        "app/api/translations/search/route.ts"
+      ]
+    },
+    {
+      "name": "Translation Keys Management",
+      "description": "Create, update, delete translation keys with namespaces, descriptions, and metadata",
+      "files": [
+        "app/(dashboard)/projects/[id]/keys/new/page.tsx",
+        "components/add-key-page-client.tsx",
+        "components/add-key-dialog.tsx",
+        "components/delete-key-button.tsx",
+        "app/api/translation-keys/route.ts",
+        "app/api/translation-keys/[id]/route.ts",
+        "app/api/translation-keys/bulk/route.ts"
+      ]
+    },
+    {
+      "name": "Translation Workflow",
+      "description": "Draft → Review → Approved workflow with role-based permissions and state management",
+      "files": [
+        "lib/workflow.ts",
+        "app/api/translations/[id]/route.ts"
+      ]
+    },
+    {
+      "name": "AI Translation",
+      "description": "Multi-provider AI translation with OpenAI GPT-4o, Google Gemini Pro, and Google Translate API with fallback and image context support",
+      "files": [
+        "app/api/auto-translate/route.ts",
+        "lib/auto-translate.ts",
+        "lib/ai-providers/openai.ts",
+        "lib/ai-providers/gemini.ts",
+        "lib/ai-providers/google-translate.ts",
+        "lib/ai-providers/types.ts",
+        "components/auto-translate-button.tsx",
+        "components/ai-provider-config.tsx",
+        "components/ai-model-config.tsx"
+      ]
+    },
+    {
+      "name": "Translation Memory",
+      "description": "Intelligent translation suggestions based on previously approved translations with fuzzy matching",
+      "files": [
+        "lib/translation-memory.ts",
+        "app/api/translation-memory/route.ts",
+        "components/translation-memory-suggestions.tsx"
+      ]
+    },
+    {
+      "name": "Translation History",
+      "description": "Complete audit trail with user attribution, version tracking, and rollback functionality",
+      "files": [
+        "app/api/translations/[id]/history/route.ts",
+        "app/api/translations/[id]/rollback/route.ts",
+        "components/translation-history-viewer.tsx",
+        "components/version-comparison.tsx"
+      ]
+    },
+    {
+      "name": "Comments System",
+      "description": "Collaborative commenting system with @mentions, user attribution, and notifications",
+      "files": [
+        "app/api/comments/route.ts",
+        "app/api/comments/[id]/route.ts",
+        "app/api/comments/users/route.ts",
+        "components/translation-comments.tsx",
+        "lib/utils/mentions.ts"
+      ]
+    },
+    {
+      "name": "Screenshot Management",
+      "description": "Upload and manage screenshots for translation keys with image optimization and cloud storage",
+      "files": [
+        "app/api/key-screenshots/route.ts",
+        "app/api/key-screenshots/[id]/route.ts",
+        "app/api/upload/route.ts",
+        "components/screenshot-manager.tsx",
+        "lib/image-utils.ts"
+      ]
+    },
+    {
+      "name": "File Import/Export",
+      "description": "Import and export translations in multiple formats: JSON, CSV, XLIFF 1.2, XLIFF 2.0 with preview and validation",
+      "files": [
+        "app/(dashboard)/projects/[id]/export/page.tsx",
+        "app/(dashboard)/projects/[id]/bulk-upload/page.tsx",
+        "components/export-page-client.tsx",
+        "components/bulk-upload-page-client.tsx",
+        "components/file-import-export.tsx",
+        "app/api/projects/[id]/export/route.ts",
+        "app/api/projects/[id]/export/preview/route.ts",
+        "app/api/projects/[id]/import/preview/route.ts",
+        "app/api/projects/[id]/bulk-upload/route.ts",
+        "app/api/projects/[id]/bulk-download/route.ts",
+        "lib/formats/json.ts",
+        "lib/formats/csv.ts",
+        "lib/formats/xliff.ts",
+        "lib/formats/android-xml.ts",
+        "lib/formats/arb.ts",
+        "lib/formats/gettext.ts",
+        "lib/formats/resx.ts",
+        "lib/formats/strings.ts",
+        "lib/formats/yaml.ts"
+      ]
+    },
+    {
+      "name": "Figma Integration",
+      "description": "Import translation keys directly from Figma designs by extracting text nodes",
+      "files": [
+        "app/(dashboard)/projects/[id]/figma-import/page.tsx",
+        "components/figma-import-page-client.tsx",
+        "components/figma-import-dialog.tsx",
+        "app/api/projects/[id]/import-figma/route.ts",
+        "lib/formats/figma.ts"
+      ]
+    },
+    {
+      "name": "Translation Queue",
+      "description": "Background processing system for bulk AI translations with status tracking, error recovery, and retry logic",
+      "files": [
+        "app/(dashboard)/projects/[id]/queue/page.tsx",
+        "components/translation-queue-dashboard.tsx",
+        "app/api/translation-queue/route.ts",
+        "app/api/translation-queue/process/route.ts",
+        "lib/queue-error-handler.ts"
+      ]
+    },
+    {
+      "name": "Analytics Dashboard",
+      "description": "Comprehensive analytics with translation completion rates, activity metrics, review turnaround times, and user contributions",
+      "files": [
+        "app/(dashboard)/projects/[id]/analytics/page.tsx",
+        "components/analytics-dashboard-client.tsx",
+        "app/api/projects/[id]/analytics/route.ts"
+      ]
+    },
+    {
+      "name": "Notification System",
+      "description": "In-app notification system with bell icon, notification center, and triggers for review requests, approvals, and mentions",
+      "files": [
+        "app/api/notifications/route.ts",
+        "app/api/notifications/[id]/route.ts",
+        "app/api/notifications/[id]/read/route.ts",
+        "app/api/notifications/read-all/route.ts",
+        "components/notification-bell.tsx",
+        "components/notification-center.tsx",
+        "lib/notifications/service.ts",
+        "lib/notifications/triggers.ts",
+        "lib/notifications/email.ts"
+      ]
+    },
+    {
+      "name": "Language Management",
+      "description": "Add, remove, and manage languages for projects with default language support",
+      "files": [
+        "app/api/languages/route.ts",
+        "app/api/projects/[id]/languages/route.ts",
+        "components/language-manager.tsx"
+      ]
+    },
+    {
+      "name": "Public Translation API",
+      "description": "RESTful API endpoint for fetching translations with API key authentication, language filtering, and namespace support",
+      "files": [
+        "app/api/v1/translations/route.ts",
+        "lib/api-middleware.ts",
+        "lib/rate-limit.ts"
+      ]
+    },
+    {
+      "name": "Cloud Storage Integration",
+      "description": "Support for multiple storage backends: S3-compatible (R2, B2, Spaces), Vercel Blob, and local storage",
+      "files": [
+        "app/api/storage/delete/route.ts",
+        "lib/storage/index.ts",
+        "lib/storage/s3-compatible.ts",
+        "lib/storage/vercel-blob.ts",
+        "lib/storage/local.ts",
+        "lib/storage/types.ts"
+      ]
+    },
+    {
+      "name": "Organization Management",
+      "description": "Multi-tenant organization support with member management, settings, and access control",
+      "files": [
+        "app/(dashboard)/organizations/[id]/settings/page.tsx",
+        "components/organization-settings-client.tsx",
+        "components/organization-member-manager.tsx",
+        "app/api/organizations/route.ts",
+        "app/api/organizations/[id]/route.ts",
+        "app/api/organizations/[id]/settings/route.ts",
+        "app/api/organizations/[id]/members/route.ts",
+        "app/api/organizations/primary/route.ts",
+        "lib/organizations/settings.ts",
+        "lib/organizations/context.ts",
+        "lib/organizations/auth.ts",
+        "lib/security/organization-access.ts"
+      ]
+    },
+    {
+      "name": "User Management",
+      "description": "User role management, user listing, and role assignment with Admin, Translator, and Reviewer roles",
+      "files": [
+        "app/(dashboard)/users/page.tsx",
+        "components/user-role-manager.tsx",
+        "app/api/users/[id]/role/route.ts"
+      ]
+    },
+    {
+      "name": "CLI Integration",
+      "description": "Command-line interface for managing translations with OAuth authentication and sync capabilities",
+      "files": [
+        "app/api/cli/login/route.ts",
+        "app/api/cli/auth/route.ts",
+        "app/api/cli/callback/route.ts",
+        "app/api/cli/sync/route.ts",
+        "cli/src/index.ts",
+        "cli/src/api.ts",
+        "cli/src/config.ts",
+        "cli/src/commands/login.ts",
+        "cli/src/commands/pull.ts",
+        "cli/src/commands/push.ts",
+        "cli/src/commands/sync.ts",
+        "cli/src/commands/project.ts",
+        "cli/src/commands/init.ts",
+        "cli/src/commands/status.ts"
+      ]
+    },
+    {
+      "name": "Webhook System",
+      "description": "Event-driven webhook system for integrations with external services",
+      "files": [
+        "app/api/projects/[id]/webhooks/route.ts",
+        "lib/webhooks/dispatcher.ts",
+        "lib/webhooks/events.ts",
+        "lib/integrations/dispatcher.ts",
+        "lib/integrations/slack.ts"
+      ]
+    },
+    {
+      "name": "Saved Searches",
+      "description": "Save and reuse search queries for quick access to filtered translation views",
+      "files": [
+        "app/api/saved-searches/route.ts",
+        "app/api/saved-searches/[id]/route.ts",
+        "app/api/search-history/route.ts"
+      ]
+    },
+    {
+      "name": "UI Components",
+      "description": "Reusable UI components built with Shadcn UI and Radix UI primitives",
+      "files": [
+        "components/ui/alert-dialog.tsx",
+        "components/ui/alert.tsx",
+        "components/ui/avatar.tsx",
+        "components/ui/badge.tsx",
+        "components/ui/button.tsx",
+        "components/ui/card.tsx",
+        "components/ui/checkbox.tsx",
+        "components/ui/dialog.tsx",
+        "components/ui/dropdown-menu.tsx",
+        "components/ui/input.tsx",
+        "components/ui/label.tsx",
+        "components/ui/popover.tsx",
+        "components/ui/scroll-area.tsx",
+        "components/ui/select.tsx",
+        "components/ui/separator.tsx",
+        "components/ui/sheet.tsx",
+        "components/ui/sidebar.tsx",
+        "components/ui/skeleton.tsx",
+        "components/ui/switch.tsx",
+        "components/ui/tabs.tsx",
+        "components/ui/textarea.tsx",
+        "components/ui/toast.tsx",
+        "components/ui/toaster.tsx",
+        "components/ui/tooltip.tsx"
+      ]
+    },
+    {
+      "name": "Dashboard Layout",
+      "description": "Main dashboard layout with navigation, sidebar, and responsive design",
+      "files": [
+        "app/(dashboard)/layout.tsx",
+        "components/dashboard-layout.tsx",
+        "components/theme-provider.tsx"
+      ]
+    },
+    {
+      "name": "Caching System",
+      "description": "In-memory and Redis caching for improved performance with invalidation strategies",
+      "files": [
+        "lib/cache/index.ts",
+        "lib/cache/memory.ts",
+        "lib/cache/redis.ts",
+        "lib/cache/invalidation.ts",
+        "lib/cache/types.ts"
+      ]
+    },
+    {
+      "name": "Security Features",
+      "description": "Security utilities including encryption, organization access control, and API key hashing",
+      "files": [
+        "lib/security/encryption.ts",
+        "lib/security/organization-access.ts",
+        "lib/api-middleware.ts",
+        "lib/rate-limit.ts"
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "description": "Centralized error handling system with user-friendly error messages and error codes",
+      "files": [
+        "lib/errors.ts",
+        "app/(auth)/error/page.tsx",
+        "app/not-found.tsx"
+      ]
+    },
+    {
+      "name": "Database Schema",
+      "description": "Complete database schema with all tables for users, projects, translations, comments, notifications, and organizations",
+      "files": [
+        "lib/db/schema.ts",
+        "lib/db/index.ts"
+      ]
+    },
+    {
+      "name": "Utilities",
+      "description": "Shared utility functions for common operations",
+      "files": [
+        "lib/utils.ts",
+        "lib/utils/mentions.ts",
+        "hooks/use-mobile.tsx",
+        "hooks/use-toast.ts"
+      ]
+    },
+    {
+      "name": "Health Check",
+      "description": "API endpoint for health monitoring and status checks",
+      "files": [
+        "app/api/health/route.ts"
+      ]
+    }
+  ]
+}
+
