@@ -81,7 +81,7 @@ export async function GET(
     const totalTranslations = totalTranslationsResult.length;
 
     // Generate sample based on format
-    let sample: Record<string, any> = {};
+    let sample: Record<string, string | Record<string, string>> = {};
     let structure = "";
 
     if (format === "json") {
@@ -165,7 +165,7 @@ export async function GET(
       };
       structure = ".NET RESX XML format";
     } else if (format === "yaml" || format === "yml") {
-      const yamlSample: Record<string, any> = {};
+      const yamlSample: Record<string, string | Record<string, string>> = {};
       const langCode = lang || "en";
       yamlSample[langCode] = {};
       for (const t of allTranslations.slice(0, 3)) {

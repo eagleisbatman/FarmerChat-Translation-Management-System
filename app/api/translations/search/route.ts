@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { translationKeys, translations, languages, projects } from "@/lib/db/schema";
+import { translationKeys, translations, languages, projects, translationStateEnum } from "@/lib/db/schema";
 import { eq, and, or, like, sql, inArray } from "drizzle-orm";
 import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
 import { verifyProjectAccess } from "@/lib/security/organization-access";
+
+type TranslationState = "draft" | "review" | "approved";
 
 /**
  * Advanced search endpoint with full-text search support
@@ -43,7 +45,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (state) {
-      conditions.push(eq(translations.state, state as any));
+      // Validate state is a valid translation state
+      const validStates: TranslationState[] = ["draft", "review", "approved"];
+      if (validStates.includes(state as TranslationState)) {
+        conditions.push(eq(translations.state, state as TranslationState));
+      }
     }
 
     if (lang) {

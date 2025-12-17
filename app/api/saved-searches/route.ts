@@ -8,17 +8,28 @@ import { z } from "zod";
 import { formatErrorResponse, AuthenticationError, ValidationError, NotFoundError } from "@/lib/errors";
 import { verifyProjectAccess } from "@/lib/security/organization-access";
 
+// Define filter schema for type safety
+const searchFilterSchema = z.record(
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.array(z.string()),
+    z.array(z.number()),
+  ])
+);
+
 const createSavedSearchSchema = z.object({
   projectId: z.string().min(1),
   name: z.string().min(1).max(255),
   query: z.string().min(1),
-  filters: z.record(z.any()).optional(),
+  filters: searchFilterSchema.optional(),
 });
 
 const updateSavedSearchSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   query: z.string().min(1).optional(),
-  filters: z.record(z.any()).optional(),
+  filters: searchFilterSchema.optional(),
 });
 
 /**

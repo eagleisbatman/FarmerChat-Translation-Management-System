@@ -32,8 +32,18 @@ export async function validateApiKey(request: NextRequest): Promise<{
 
     // Backward compatibility: Check hash for old API keys
     // This is slower but only runs if direct match fails
-    const allProjects = await db.select().from(projects);
-    for (const proj of allProjects) {
+    // Limit to 100 projects to prevent loading all projects in large deployments
+    // Note: In production, consider migrating old API keys to the new format
+    // or adding an index/flag to identify old-format keys
+    const oldProjects = await db
+      .select()
+      .from(projects)
+      .limit(100);
+    
+    for (const proj of oldProjects) {
+      // Skip if no hash (shouldn't happen, but defensive)
+      if (!proj.apiKeyHash) continue;
+      
       try {
         const isValid = await bcrypt.compare(apiKey, proj.apiKeyHash);
         if (isValid) {

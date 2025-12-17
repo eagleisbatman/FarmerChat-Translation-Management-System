@@ -65,8 +65,13 @@ export async function POST(request: NextRequest) {
       .innerJoin(users, eq(projectMembers.userId, users.id))
       .where(eq(projectMembers.projectId, projectId));
 
-    // Also get all users (for broader @mention support)
-    const allUsers = await db.select().from(users);
+    // Get users for @mention support (limit to 500 most recent users for performance)
+    // This prevents loading all users which could cause memory issues with large user bases
+    const allUsers = await db
+      .select()
+      .from(users)
+      .orderBy(users.createdAt)
+      .limit(500);
 
     // Create user map for mention parsing
     const userMap = new Map<string, { id: string; name: string; email: string }>();

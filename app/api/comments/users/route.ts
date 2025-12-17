@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users, translations, translationKeys, projects, projectMembers } from "@/lib/db/schema";
-import { eq, or, ilike } from "drizzle-orm";
+import { eq, or, ilike, SQL } from "drizzle-orm";
 import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
 
 /**
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
     const memberUserIds = projectMembersData.map((m) => m.userId);
 
     // Build query conditions
-    const conditions: any[] = [];
+    const conditions: SQL[] = [];
 
     if (query) {
       conditions.push(
