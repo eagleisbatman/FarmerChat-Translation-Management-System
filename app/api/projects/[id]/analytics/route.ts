@@ -181,15 +181,6 @@ export async function GET(
         return totalB - totalA;
       })
       .slice(0, 10);
-    
-    const userContributions = userContributionsRaw.map((uc) => ({
-      userId: uc.userId,
-      userName: uc.userName,
-      userEmail: uc.userEmail,
-      translationsCreated: Number(uc.translationsCreated || 0),
-      translationsApproved: Number(uc.translationsApproved || 0),
-      reviewsCompleted: Number(uc.reviewsCompleted || 0),
-    }));
 
     // 4. Translation activity over time (last 30 days)
     const thirtyDaysAgo = new Date();

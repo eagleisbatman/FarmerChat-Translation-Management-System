@@ -23,7 +23,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        formatErrorResponse(new ValidationError("Invalid JSON in request body")),
+        { status: 400 }
+      );
+    }
+
     const data = createCommentSchema.parse(body);
 
     // Get project ID from translation and verify access
@@ -45,13 +54,6 @@ export async function POST(request: NextRequest) {
 
     // Verify user has access to project's organization
     await verifyProjectAccess(session.user.id, projectId);
-
-    // Get all users in the project (members + all users for autocomplete)
-    const [projectMembersData] = await db
-      .select()
-      .from(projectMembers)
-      .where(eq(projectMembers.projectId, projectId))
-      .limit(1);
 
     // Get project members
     const members = await db

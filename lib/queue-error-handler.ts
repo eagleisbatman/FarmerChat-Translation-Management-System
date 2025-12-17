@@ -86,13 +86,13 @@ export async function handleQueueError(
 
   if (isRetryable && retryCount < MAX_RETRIES) {
     // Mark as pending for retry
+    // The queue processor will pick up items with status "pending" and retry them
     await markQueueItemFailed(itemId, `Retryable error: ${errorMessage}`, retryCount + 1);
     
-    // Schedule retry (in production, use a job queue)
-    setTimeout(async () => {
-      // Retry logic would be handled by queue processor
-      console.log(`Scheduling retry for queue item ${itemId}`);
-    }, RETRY_DELAY_MS * (retryCount + 1)); // Exponential backoff
+    // Note: Actual retry scheduling should be handled by a job queue system (e.g., Bull, BullMQ, or similar)
+    // The queue processor should check for items with status "pending" and retry them
+    // This function only marks the item for retry; the queue processor handles the actual retry logic
+    console.log(`Queue item ${itemId} marked for retry (attempt ${retryCount + 1}/${MAX_RETRIES})`);
   } else {
     // Mark as permanently failed
     await markQueueItemFailed(itemId, `Failed after ${retryCount + 1} attempts: ${errorMessage}`, MAX_RETRIES);

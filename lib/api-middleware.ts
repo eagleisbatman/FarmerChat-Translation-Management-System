@@ -19,22 +19,28 @@ export async function validateApiKey(request: NextRequest): Promise<{
   }
 
   try {
-    const allProjects = await db.select().from(projects);
+    // Optimized: Query directly by apiKey (indexed, unique constraint)
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.apiKey, apiKey))
+      .limit(1);
 
-    for (const project of allProjects) {
-      // Compare with stored API key (plain text) or hash
-      if (project.apiKey === apiKey) {
-        return { valid: true, projectId: project.id };
-      }
-      
-      // Also check hash for backward compatibility
+    if (project) {
+      return { valid: true, projectId: project.id };
+    }
+
+    // Backward compatibility: Check hash for old API keys
+    // This is slower but only runs if direct match fails
+    const allProjects = await db.select().from(projects);
+    for (const proj of allProjects) {
       try {
-        const isValid = await bcrypt.compare(apiKey, project.apiKeyHash);
+        const isValid = await bcrypt.compare(apiKey, proj.apiKeyHash);
         if (isValid) {
-          return { valid: true, projectId: project.id };
+          return { valid: true, projectId: proj.id };
         }
       } catch {
-        // Ignore bcrypt errors
+        // Ignore bcrypt errors (invalid hash format, etc.)
       }
     }
 

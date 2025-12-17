@@ -21,7 +21,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        formatErrorResponse(new ValidationError("Invalid JSON in request body")),
+        { status: 400 }
+      );
+    }
+
     const data = bulkActionSchema.parse(body);
 
     // Verify user has admin access to project's organization
@@ -54,11 +63,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(formatErrorResponse(new ForbiddenError("Only admins can delete keys")), { status: 403 });
       }
 
-      // Delete translations first (cascade should handle this, but being explicit)
-      await db.delete(translations).where(inArray(translations.keyId, data.keyIds));
+      // Use transaction to ensure atomicity
+      await db.transaction(async (tx) => {
+        // Delete translations first (cascade should handle this, but being explicit)
+        await tx.delete(translations).where(inArray(translations.keyId, data.keyIds));
 
-      // Delete the keys
-      await db.delete(translationKeys).where(inArray(translationKeys.id, data.keyIds));
+        // Delete the keys
+        await tx.delete(translationKeys).where(inArray(translationKeys.id, data.keyIds));
+      });
 
       return NextResponse.json({ success: true, deleted: data.keyIds.length });
     }
@@ -70,29 +82,34 @@ export async function POST(request: NextRequest) {
 
       const newState = data.action === "approve" ? "approved" : "draft";
 
-      // Get all translations for these keys
-      const allTranslations = await db
-        .select()
-        .from(translations)
-        .where(inArray(translations.keyId, data.keyIds));
+      // Use transaction to ensure atomicity
+      const result = await db.transaction(async (tx) => {
+        // Get all translations for these keys
+        const allTranslations = await tx
+          .select()
+          .from(translations)
+          .where(inArray(translations.keyId, data.keyIds));
 
-      // Update translations
-      for (const translation of allTranslations) {
-        await db
-          .update(translations)
-          .set({
-            state: newState,
-            reviewedBy: data.action === "approve" ? session.user.id : null,
-            updatedAt: new Date(),
-          })
-          .where(eq(translations.id, translation.id));
-      }
+        // Update translations atomically
+        for (const translation of allTranslations) {
+          await tx
+            .update(translations)
+            .set({
+              state: newState,
+              reviewedBy: data.action === "approve" ? session.user.id : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(translations.id, translation.id));
+        }
 
-      return NextResponse.json({
-        success: true,
-        updated: allTranslations.length,
-        keys: data.keyIds.length,
+        return {
+          success: true,
+          updated: allTranslations.length,
+          keys: data.keyIds.length,
+        };
       });
+
+      return NextResponse.json(result);
     }
 
     return NextResponse.json(formatErrorResponse(new ValidationError("Invalid action")), { status: 400 });

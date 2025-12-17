@@ -45,6 +45,14 @@ export async function GET(request: NextRequest) {
     const lang = request.nextUrl.searchParams.get("lang");
     const namespace = request.nextUrl.searchParams.get("namespace");
 
+    // Helper to add rate limit headers (defined early to avoid hoisting issues)
+    const addRateLimitHeaders = (res: NextResponse) => {
+      res.headers.set("X-RateLimit-Limit", "100");
+      res.headers.set("X-RateLimit-Remaining", rateLimitResult.remaining.toString());
+      res.headers.set("X-RateLimit-Reset", new Date(rateLimitResult.resetTime).toISOString());
+      return res;
+    };
+
     // Check cache first (only for approved translations, which are stable)
     const { Cache, CacheKeys, CacheTTL } = await import("@/lib/cache");
     const cache = new Cache();
@@ -110,14 +118,6 @@ export async function GET(request: NextRequest) {
 
     // Cache for 1 hour (approved translations are stable)
     await cache.set(cacheKey, responseData, CacheTTL.LONG);
-
-    // Helper to add rate limit headers
-    const addRateLimitHeaders = (res: NextResponse) => {
-      res.headers.set("X-RateLimit-Limit", "100");
-      res.headers.set("X-RateLimit-Remaining", rateLimitResult.remaining.toString());
-      res.headers.set("X-RateLimit-Reset", new Date(rateLimitResult.resetTime).toISOString());
-      return res;
-    };
 
     // If language filter is applied, return flat object
     if (lang) {

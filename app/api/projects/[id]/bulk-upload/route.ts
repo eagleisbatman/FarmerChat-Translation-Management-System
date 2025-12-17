@@ -31,7 +31,16 @@ export async function POST(
       return NextResponse.json(formatErrorResponse(new AuthenticationError()), { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      return NextResponse.json(
+        formatErrorResponse(new ValidationError("Invalid JSON in request body")),
+        { status: 400 }
+      );
+    }
+
     const data = bulkUploadSchema.parse(body);
 
     // Verify user has access to project's organization
@@ -46,153 +55,159 @@ export async function POST(
     let keysSkipped = 0;
     const errors: string[] = [];
 
-    // Get all existing keys upfront for efficiency
-    const existingKeys = await db
-      .select()
-      .from(translationKeys)
-      .where(eq(translationKeys.projectId, projectId));
-    
-    const existingKeysMap = new Map(existingKeys.map((k) => [k.key, k]));
-
-    // Process each key
-    for (const keyData of data.keys) {
-      const resolution = conflictResolution[keyData.key] || "overwrite"; // Default to overwrite
+    // Use transaction to ensure atomicity of bulk operations
+    // This prevents race conditions where partial data is written if an error occurs mid-way
+    const result = await db.transaction(async (tx) => {
+      // Get all existing keys upfront for efficiency
+      const existingKeys = await tx
+        .select()
+        .from(translationKeys)
+        .where(eq(translationKeys.projectId, projectId));
       
-      // Check if key already exists
-      const existingKey = existingKeysMap.get(keyData.key);
+      const existingKeysMap = new Map(existingKeys.map((k) => [k.key, k]));
 
-      // Handle conflict resolution
-      if (existingKey && resolution === "skip") {
-        keysSkipped++;
-        continue;
-      }
+      // Process each key
+      for (const keyData of data.keys) {
+        const resolution = conflictResolution[keyData.key] || "overwrite"; // Default to overwrite
+        
+        // Check if key already exists
+        const existingKey = existingKeysMap.get(keyData.key);
 
-      let keyId: string;
-      if (existingKey) {
-        keyId = existingKey.id;
-        // Update namespace/description if provided and resolution is overwrite or merge
-        if (resolution !== "skip" && (keyData.namespace !== undefined || keyData.description !== undefined)) {
-          if (!dryRun) {
-            await db
-              .update(translationKeys)
-              .set({
-                namespace: keyData.namespace !== undefined ? keyData.namespace : existingKey.namespace,
-                description: keyData.description !== undefined ? keyData.description : existingKey.description,
-                updatedAt: new Date(),
-              })
-              .where(eq(translationKeys.id, keyId));
-          }
-        }
-      } else {
-        if (!dryRun) {
-          // Create new key
-          const [newKey] = await db
-            .insert(translationKeys)
-            .values({
-              id: nanoid(),
-              projectId,
-              key: keyData.key,
-              namespace: keyData.namespace,
-              description: keyData.description,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .returning();
-          keyId = newKey.id;
-        } else {
-          keyId = existingKey?.id || "new"; // Use existing key ID or mark as new
-        }
-        if (!existingKey) {
-          keysCreated++;
-        }
-      }
-
-      // Get existing translations for this key (for both dry-run and actual import)
-      const existingTranslations = existingKey
-        ? await db
-            .select()
-            .from(translations)
-            .where(eq(translations.keyId, existingKey.id))
-        : [];
-
-      const existingTranslationsMap = new Map(
-        existingTranslations.map((t) => [t.languageId, t])
-      );
-
-      // Create/update translations for each language
-      for (const [langCode, value] of Object.entries(keyData.translations)) {
-        // Get language ID
-        const [language] = await db
-          .select()
-          .from(languages)
-          .where(eq(languages.code, langCode))
-          .limit(1);
-
-        if (!language) {
-          errors.push(`Language ${langCode} not found for key ${keyData.key}`);
+        // Handle conflict resolution
+        if (existingKey && resolution === "skip") {
+          keysSkipped++;
           continue;
         }
 
-        const existingTranslation = existingTranslationsMap.get(language.id);
-
-        if (existingTranslation) {
-          // Translation exists - apply conflict resolution
-          if (resolution === "skip") {
-            keysSkipped++;
-            continue; // Skip this translation
-          } else if (resolution === "merge") {
-            // Merge: only update if new value is different and not empty
-            if (!dryRun && value && value !== existingTranslation.value) {
-              await db
-                .update(translations)
-                .set({
-                  value,
-                  updatedAt: new Date(),
-                })
-                .where(eq(translations.id, existingTranslation.id));
-            }
-            translationsUpdated++;
-          } else {
-            // Overwrite: always update
+        let keyId: string;
+        if (existingKey) {
+          keyId = existingKey.id;
+          // Update namespace/description if provided and resolution is overwrite or merge
+          if (resolution !== "skip" && (keyData.namespace !== undefined || keyData.description !== undefined)) {
             if (!dryRun) {
-              await db
-                .update(translations)
+              await tx
+                .update(translationKeys)
                 .set({
-                  value,
+                  namespace: keyData.namespace !== undefined ? keyData.namespace : existingKey.namespace,
+                  description: keyData.description !== undefined ? keyData.description : existingKey.description,
                   updatedAt: new Date(),
                 })
-                .where(eq(translations.id, existingTranslation.id));
+                .where(eq(translationKeys.id, keyId));
             }
-            translationsUpdated++;
           }
         } else {
-          // New translation
           if (!dryRun) {
-            await db.insert(translations).values({
-              id: nanoid(),
-              keyId: existingKey?.id || keyId,
-              languageId: language.id,
-              value,
-              state: "draft",
-              createdBy: session.user.id,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
+            // Create new key
+            const [newKey] = await tx
+              .insert(translationKeys)
+              .values({
+                id: nanoid(),
+                projectId,
+                key: keyData.key,
+                namespace: keyData.namespace,
+                description: keyData.description,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .returning();
+            keyId = newKey.id;
+          } else {
+            keyId = existingKey?.id || "new"; // Use existing key ID or mark as new
           }
-          translationsCreated++;
+          if (!existingKey) {
+            keysCreated++;
+          }
+        }
+
+        // Get existing translations for this key (for both dry-run and actual import)
+        const existingTranslations = existingKey
+          ? await tx
+              .select()
+              .from(translations)
+              .where(eq(translations.keyId, existingKey.id))
+          : [];
+
+        const existingTranslationsMap = new Map(
+          existingTranslations.map((t) => [t.languageId, t])
+        );
+
+        // Create/update translations for each language
+        for (const [langCode, value] of Object.entries(keyData.translations)) {
+          // Get language ID (languages table is read-only, can use db)
+          const [language] = await db
+            .select()
+            .from(languages)
+            .where(eq(languages.code, langCode))
+            .limit(1);
+
+          if (!language) {
+            errors.push(`Language ${langCode} not found for key ${keyData.key}`);
+            continue;
+          }
+
+          const existingTranslation = existingTranslationsMap.get(language.id);
+
+          if (existingTranslation) {
+            // Translation exists - apply conflict resolution
+            if (resolution === "skip") {
+              keysSkipped++;
+              continue; // Skip this translation
+            } else if (resolution === "merge") {
+              // Merge: only update if new value is different and not empty
+              if (!dryRun && value && value !== existingTranslation.value) {
+                await tx
+                  .update(translations)
+                  .set({
+                    value,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(translations.id, existingTranslation.id));
+              }
+              translationsUpdated++;
+            } else {
+              // Overwrite: always update
+              if (!dryRun) {
+                await tx
+                  .update(translations)
+                  .set({
+                    value,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(translations.id, existingTranslation.id));
+              }
+              translationsUpdated++;
+            }
+          } else {
+            // New translation
+            if (!dryRun) {
+              await tx.insert(translations).values({
+                id: nanoid(),
+                keyId: existingKey?.id || keyId,
+                languageId: language.id,
+                value,
+                state: "draft",
+                createdBy: session.user.id,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            }
+            translationsCreated++;
+          }
         }
       }
-    }
 
-    return NextResponse.json({
-      success: true,
-      dryRun,
-      keysCreated,
-      translationsCreated,
-      translationsUpdated,
-      keysSkipped,
-      errors: errors.length > 0 ? errors : undefined,
+      return {
+        success: true,
+        dryRun,
+        keysCreated,
+        translationsCreated,
+        translationsUpdated,
+        keysSkipped,
+        errors: errors.length > 0 ? errors : undefined,
+      };
     });
+
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errorResponse = formatErrorResponse(

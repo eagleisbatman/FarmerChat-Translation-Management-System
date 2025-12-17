@@ -13,8 +13,13 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "migrate:multi-tenant": "npx tsx scripts/migrate-to-multi-tenant.ts",
+    "setup:oauth": "tsx scripts/setup-oauth.ts",
+    "setup:env": "tsx scripts/setup-env.ts",
     "validate:oauth": "tsx scripts/validate-oauth.ts",
-    "test:oauth": "curl -s http://localhost:3000/api/health/oauth | jq . || curl -s http://localhost:3000/api/health/oauth"
+    "test:oauth": "curl -s http://localhost:3000/api/health/oauth | jq . || curl -s http://localhost:3000/api/health/oauth",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",

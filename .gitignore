@@ -52,3 +52,7 @@ next-env.d.ts
 # Docs folder (contains non-committed documentation)
 /docs
 docs/
+
+# Test artifacts and temporary files
+testsprite_tests/tmp/
+*.tmp
