@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
 import { nanoid } from "nanoid";
 import { notifyReviewRequest } from "@/lib/notifications/triggers";
+import { verifyProjectAccess } from "@/lib/security/organization-access";
 
 /**
  * Verify CLI token
@@ -45,16 +46,8 @@ export async function GET(request: NextRequest) {
       throw new ValidationError("projectId is required");
     }
 
-    // Verify user has access to project
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .limit(1);
-
-    if (!project) {
-      throw new ValidationError("Project not found");
-    }
+    // Verify user has access to project through organization membership
+    const { project } = await verifyProjectAccess(userId, projectId);
 
     // Build query conditions
     const conditions = [
@@ -146,16 +139,8 @@ export async function POST(request: NextRequest) {
       throw new ValidationError("projectId and translations are required");
     }
 
-    // Verify user has access to project
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-      .limit(1);
-
-    if (!project) {
-      throw new ValidationError("Project not found");
-    }
+    // Verify user has access to project through organization membership
+    const { project } = await verifyProjectAccess(userId, projectId);
 
     // Get default language if lang not specified
     let targetLanguageId = project.defaultLanguageId;
@@ -286,8 +271,11 @@ export async function POST(request: NextRequest) {
     // Handle deprecation
     if (Array.isArray(deprecate) && deprecate.length > 0) {
       for (const keyPath of deprecate) {
-        const [namespace, key] = keyPath.includes(".") 
-          ? keyPath.split(".", 2)
+        // Split on first dot only to separate namespace from full key
+        // This preserves keys with multiple dots (e.g., "common.button.submit.label")
+        const dotIndex = keyPath.indexOf(".");
+        const [namespace, key] = dotIndex > 0
+          ? [keyPath.substring(0, dotIndex), keyPath.substring(dotIndex + 1)]
           : ["default", keyPath];
 
         await db
