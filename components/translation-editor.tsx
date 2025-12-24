@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Save, CheckCircle, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import Link from "next/link";
 import { FileImportExport } from "./file-import-export";
 import { AutoTranslateButton } from "./auto-translate-button";
 import { TranslationMemorySuggestions } from "./translation-memory-suggestions";

@@ -91,3 +91,100 @@
   }
 }
 
+/* Safe areas for notched devices (iPhone X+, etc.) */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@screen sm {
+  .sm\:safe-area-bottom-0 {
+    padding-bottom: 0;
+  }
+}
+
+/* Touch optimizations (mobile only) */
+@media (hover: none) {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Hover states only on devices that support it */
+@media (hover: hover) {
+  .hover-lift:hover {
+    transform: translateY(-2px);
+  }
+
+  .hover-scale:hover {
+    transform: scale(1.02);
+  }
+}
+
+/* Hide scrollbars but keep functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Desktop: show nice scrollbars */
+@media (min-width: 1024px) {
+  .auto-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+/* Glass effect for headers */
+.glass-effect {
+  @apply bg-background/80 backdrop-blur-md;
+}
+
+/* Card hover animation */
+.card-interactive {
+  @apply transition-all duration-200;
+}
+
+@media (hover: hover) {
+  .card-interactive:hover {
+    @apply shadow-lg -translate-y-0.5;
+  }
+}
+
+@media (hover: none) {
+  .card-interactive:active {
+    @apply bg-muted/50;
+  }
+}
+
+/* Bottom navigation styles */
+.bottom-nav {
+  @apply fixed bottom-0 inset-x-0 z-50 border-t bg-background;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+  @apply bg-gradient-to-br from-primary/90 to-primary;
+}
+
+.gradient-accent {
+  @apply bg-gradient-to-br from-blue-500 to-indigo-600;
+}
+
